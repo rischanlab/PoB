@@ -125,25 +125,31 @@ flowchart LR
 
 The prototype calculates the Backing Coverage Ratio as:
 
-\[
-BCR =
-\frac{\text{eligible reserves}}
-{\text{token liabilities}+\text{pending redemptions}+\text{other liabilities}}.
-\]
+$$
+\mathrm{BCR}
+=
+\frac{\text{Eligible reserves}}
+{\text{Token liabilities}
++\text{Pending redemptions}
++\text{Other liabilities}}
+$$
 
-A mint is permitted only when the post-mint BCR meets the configured threshold.
-The current experiment uses a minimum BCR of **105%**.
+A mint is permitted only when the post-mint BCR meets the configured
+threshold. The current experiment uses a minimum BCR of **105%**.
 
-For a proposed redemption request, the experiment reports:
+For a proposed redemption request, the experiment calculates:
 
-\[
-RLC =
-\frac{\text{liquid assets}}
-{\text{pending redemptions}+\text{proposed redemption}}.
-\]
+$$
+\mathrm{RLC}
+=
+\frac{\text{Liquid assets}}
+{\text{Pending redemptions}
++\text{Proposed redemption}}
+$$
 
-The current minimum RLC is **100%**. A low RLC queues a redemption rather than
-removing the investor's claim.
+The current experiment uses a minimum RLC of **100%**. A redemption is
+settled immediately when this threshold is satisfied; otherwise, it is placed
+in the settlement queue.
 
 ## Repository structure
 
