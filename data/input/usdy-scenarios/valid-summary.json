@@ -1,0 +1,22 @@
+{
+  "scenario": "valid",
+  "description": "Eligible backing exceeds the BCR threshold and liquid assets cover a 5% redemption request.",
+  "seed": 42,
+  "positionCount": 100,
+  "valueUnit": "USD with 6 decimal places",
+  "liabilitySource": "RWA.xyz downloaded CSV",
+  "liabilityProduct": "Ondo U.S. Dollar Yield",
+  "liabilityMeasure": "Bridged Token Value (Dollar)",
+  "liabilityDate": "2026-07-26",
+  "tokenLiabilitiesUsd": "2161765036.997564",
+  "grossReservesUsd": "2486029792.547198",
+  "eligibleReservesUsd": "2479361762.407983",
+  "liquidAssetsUsd": "216176503.699756",
+  "merkleRoot": "0x50363b2ecc5eb8f344003716a7de7645a678556583512712bbfab22f0ff47903",
+  "assumptions": {
+    "targetGrossReserveBps": "11500",
+    "validLiquidAssetBps": "1000",
+    "stressLiquidAssetBps": "200",
+    "encumberedTargetEligibleBps": "9800"
+  }
+}

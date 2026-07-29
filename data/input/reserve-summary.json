@@ -1,0 +1,7 @@
+{
+  "seed": 42,
+  "positionCount": 100,
+  "merkleRoot": "0x20161f41a1320c2e88ae1a19ecac7dbc142ed28b289d0551d4e8396cc97c6eb5",
+  "grossReserves": "1521621230",
+  "eligibleReserves": "1419815309"
+}

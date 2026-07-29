@@ -1,0 +1,22 @@
+{
+  "scenario": "liquidity-stress",
+  "description": "Eligible backing remains sufficient, but only 2% of observed token value is liquid within the test horizon.",
+  "seed": 42,
+  "positionCount": 100,
+  "valueUnit": "USD with 6 decimal places",
+  "liabilitySource": "RWA.xyz downloaded CSV",
+  "liabilityProduct": "Ondo U.S. Dollar Yield",
+  "liabilityMeasure": "Bridged Token Value (Dollar)",
+  "liabilityDate": "2026-07-26",
+  "tokenLiabilitiesUsd": "2161765036.997564",
+  "grossReservesUsd": "2486029792.547198",
+  "eligibleReservesUsd": "2479361762.407983",
+  "liquidAssetsUsd": "43235300.739951",
+  "merkleRoot": "0xe949f27447550c77bc34bddb0d96ec6851f12bbf309a647311557189afd48b16",
+  "assumptions": {
+    "targetGrossReserveBps": "11500",
+    "validLiquidAssetBps": "1000",
+    "stressLiquidAssetBps": "200",
+    "encumberedTargetEligibleBps": "9800"
+  }
+}

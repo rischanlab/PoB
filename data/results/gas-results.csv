@@ -1,0 +1,7 @@
+operation,gasUsed
+submitSnapshot:valid,362241
+baselineReport:valid,94689
+submitSnapshot:encumbered-assets,194904
+baselineReport:encumbered-assets,37789
+submitSnapshot:liquidity-stress,197716
+baselineReport:liquidity-stress,37789

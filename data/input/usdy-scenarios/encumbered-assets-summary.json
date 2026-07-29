@@ -1,0 +1,22 @@
+{
+  "scenario": "encumbered-assets",
+  "description": "Gross reserves remain unchanged, but selected positions are ineligible because they are encumbered.",
+  "seed": 42,
+  "positionCount": 100,
+  "valueUnit": "USD with 6 decimal places",
+  "liabilitySource": "RWA.xyz downloaded CSV",
+  "liabilityProduct": "Ondo U.S. Dollar Yield",
+  "liabilityMeasure": "Bridged Token Value (Dollar)",
+  "liabilityDate": "2026-07-26",
+  "tokenLiabilitiesUsd": "2161765036.997564",
+  "grossReservesUsd": "2486029792.547198",
+  "eligibleReservesUsd": "2093076978.470358",
+  "liquidAssetsUsd": "216176503.699756",
+  "merkleRoot": "0x51a3707a10405c3e7e5dee33a0fcdd516c6a7ec62bc920d86cabace46b14b9fe",
+  "assumptions": {
+    "targetGrossReserveBps": "11500",
+    "validLiquidAssetBps": "1000",
+    "stressLiquidAssetBps": "200",
+    "encumberedTargetEligibleBps": "9800"
+  }
+}

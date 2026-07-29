@@ -1,0 +1,78 @@
+# Node.js dependencies
+node_modules/
+.npm/
+
+# Hardhat generated files
+artifacts/
+cache/
+typechain-types/
+.hardhat/
+
+# Test coverage and generated reports
+coverage/
+coverage.json
+.coverage_artifacts/
+.coverage_cache/
+gasReporterOutput.json
+.nyc_output/
+
+# Local deployment files
+ignition/deployments/chain-31337/
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+secrets/
+private/
+*.pem
+*.key
+*.keystore
+mnemonic.txt
+private-key.txt
+private_key.txt
+
+# Raw third-party data
+# Keep the preparation instructions, but not the original dataset.
+data/raw/*
+!data/raw/README.md
+!data/raw/.gitkeep
+
+# Logs and temporary files
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.tmp
+*.temp
+*.bak
+*.backup
+*.backup.*
+*~
+
+# Downloaded archives
+*.zip
+*.7z
+*.rar
+
+# Generated build folders
+build/
+dist/
+out/
+tmp/
+.temp/
+
+# VS Code and other editors
+.vscode/settings.json
+.idea/
+.history/
+
+# Operating-system files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Microsoft Office temporary files
+~$*
