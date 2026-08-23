@@ -18,7 +18,9 @@ contract PoBPolicyController is AccessControl, EIP712 {
     bytes32 public constant VALUATION_ROLE = keccak256("VALUATION_ROLE");
     bytes32 public constant LEGAL_ROLE = keccak256("LEGAL_ROLE");
     bytes32 public constant VERIFIER_ROLE = keccak256("VERIFIER_ROLE");
-    bytes32 public constant OPERATIONS_ROLE = keccak256("OPERATIONS_ROLE");
+    /// @notice Assigned only to token contracts or liability adapters whose
+    ///         supply transitions are atomically coupled to this controller.
+    bytes32 public constant TOKEN_ROLE = keccak256("TOKEN_ROLE");
     bytes32 public constant SETTLEMENT_ROLE = keccak256("SETTLEMENT_ROLE");
 
     uint256 private constant CUSTODIAN_BIT = 1 << 0;
@@ -142,7 +144,6 @@ contract PoBPolicyController is AccessControl, EIP712 {
         require(initialMaximumSnapshotAge > 0, "PoB: zero max age");
 
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
-        _grantRole(OPERATIONS_ROLE, msg.sender);
         _grantRole(SETTLEMENT_ROLE, msg.sender);
 
         activePolicyHash = initialPolicyHash;
@@ -323,7 +324,7 @@ contract PoBPolicyController is AccessControl, EIP712 {
     ///         latest eligible reserve snapshot.
     function authorizeMint(uint256 mintLiability)
         external
-        onlyRole(OPERATIONS_ROLE)
+        onlyRole(TOKEN_ROLE)
     {
         if (!canMint(mintLiability)) {
             revert MintPolicyFailed();
@@ -353,7 +354,7 @@ contract PoBPolicyController is AccessControl, EIP712 {
 
     function requestRedemption(address beneficiary, uint256 redemptionValue)
         external
-        onlyRole(OPERATIONS_ROLE)
+        onlyRole(TOKEN_ROLE)
         returns (uint256 redemptionId, RedemptionDisposition disposition)
     {
         if (
