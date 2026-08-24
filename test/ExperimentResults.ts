@@ -168,7 +168,7 @@ describe("RWA-PoB USDY-calibrated experiment", function () {
       ]);
       const redemptionDisposition = dispositionCode === 0 ? "instant" : "queue";
 
-      const bcr = await controller.read.currentBCR();
+      const bcr = (await controller.read.currentBCR()) as bigint;
       const postRequestRlc =
         redemptionRequest === 0n
           ? 2n ** 256n - 1n

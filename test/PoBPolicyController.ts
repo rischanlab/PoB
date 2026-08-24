@@ -33,6 +33,7 @@ async function deployFixture() {
     ["LEGAL_ROLE", legal.account.address],
     ["VERIFIER_ROLE", verifier.account.address],
     ["SETTLEMENT_ROLE", settlement.account.address],
+    ["TOKEN_ROLE", admin.account.address],
   ] as const;
 
   for (const [roleName, address] of roleAssignments) {

@@ -19,6 +19,7 @@ npm run build
 npm run generate:data
 npm test
 npm run experiment
+npm run experiment:atomic-gas
 npm run coverage
 ```
 

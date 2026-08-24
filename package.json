@@ -9,6 +9,7 @@
     "test": "hardhat test",
     "test:unit": "hardhat test test/PoBPolicyController.ts",
     "experiment": "hardhat test test/ExperimentResults.ts",
+    "experiment:atomic-gas": "hardhat test test/AtomicGasResults.ts",
     "coverage": "hardhat test --coverage",
     "prepare:usdy": "node scripts/prepare-usdy-data.mjs",
     "generate:data": "node scripts/generate-reserve-data.mjs"
@@ -23,5 +24,8 @@
   "dependencies": {
     "@openzeppelin/contracts": "5.6.1",
     "@openzeppelin/merkle-tree": "1.0.8"
+  },
+  "allowScripts": {
+    "esbuild@0.28.1": true
   }
 }

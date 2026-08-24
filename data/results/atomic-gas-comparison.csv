@@ -1,0 +1,3 @@
+comparison,atomicGas,comparisonGas,deltaGas
+atomic_vs_advisory_only,132573,82172,50401
+atomic_vs_two_transaction_sum,132573,153006,-20433
