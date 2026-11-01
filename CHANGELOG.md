@@ -4,6 +4,75 @@ All notable changes to the RWA-PoB prototype. The paper version for IET
 Blockchain (`rwa_pob_iet.tex`) mirrors this release: every number in the
 paper comes from the CSV files listed below.
 
+## [2.2.0] - 2026-11-01 - Major revision
+
+Response to the major-revision brief (priorities P1-P14). The IET Blockchain
+manuscript v3.0 mirrors this release.
+
+### Added
+
+- `contracts/test/AblationController.sol` (test only): same accounting as the
+  controller, with an optional single attestor (one verifier signature over
+  the full snapshot) and an optional switch-off of the liquidity policy.
+  `PoBPolicyController` functions `_verifyRoleScopedSignatures`, `canMint`,
+  `canMintWithReceipt`, and `redemptionDisposition` are now `virtual`.
+- `RWABackedToken.issueWithReceipt(recipient, amount, receivedCash, nonce,
+  signature)`: mints against a custodian receipt in the same transaction that
+  credits the cash (2 new tests in `AtomicControllerToken.ts`).
+- `scripts/reconcile-snapshot.mjs` (`npm run reconcile:franklin`, also in
+  CI): sums Merkle leaves and compares them with the signed aggregates and
+  with the filing.
+- `test/RealPositionSnapshot.ts`: reconciliation cases R0-R4, the
+  100/80/90 reviewer example, and a threshold sweep (100, 99.7, 99.6, 99.5,
+  99.0%) with and without a receipt (5 tests).
+- `test/FobxxDailyFlows.ts`: the 21 business days of disclosed September 2026
+  FOBXX flows on one controller (`npm run experiment:fobxx-flows`).
+- `test/PersistentController.ts`: five epochs on one deployment with partial
+  settlement across boundaries, receipt replay, policy update, lower epoch,
+  expiry, custodian rotation, and an independent ledger check after each step.
+- `test/TrustModel.ts`: executed cases T1-T6 (absent signer, compromised key
+  role-scoped vs single attestor, compromised governance, collusion, role
+  reassignment, expiry) (`npm run experiment:trust`).
+- Replay configurations (26 in total): ablation A1-A3 and A1 under 4%
+  encumbrance; encumbrance sweep 1, 2, 2.5, 3, 3.5%; accrual 7-day, 91-day,
+  and T-bill-based; persistent and persistent-encumbered; 200 bp haircut.
+  Summary CSV gained `attestation`, `mint_rule`, `liquidity_policy`,
+  `persistent`, `accrual`, `liability_conservation_violations`.
+
+### Changed
+
+- `data/input/usdy-observed-liabilities.csv` renamed to
+  `usdy-observed-token-value.csv`: RWA.xyz defines the metric as bridged token
+  supply x issuer NAV, so it is a proxy liability.
+- `prepare-franklin-nmfp3.py` also extracts daily liquid assets and NAV;
+  the Merkle root is unchanged.
+- Docs: README, REPRODUCIBILITY (environment, command-to-table map, test
+  inventory, dataset vintages), data READMEs (evidence types).
+- Plot legend: "Observed USDY token value, RWA.xyz (proxy liability)".
+
+### Results (all from `data/results/`)
+
+- 62 tests pass (Hardhat prints 63 including `test/helpers.ts`).
+- Replay: 0 unsafe mints in all 26 runs; 0 conservation violations in
+  persistent mode. Baseline 327 of 343 inferred inflows; persistent 327.
+- Ablation: A1 289 (54 BCR rejections, all 232 redemptions instant, longest
+  claim 61 days), A2 214, A3 327 = full. A1 also accepts 0 under 4%
+  encumbrance, so eligibility accounting alone causes that result.
+  Role scoping changes no decision on honest data, prevents T2, and costs
+  87,443 gas per snapshot (350,193 vs 262,750).
+- Encumbrance sweep: 327, 327, 26, 12, 6, 3, 0 accepted at 0-4%.
+- Accrual: 91-day 354/370, T-bill 475/492; 7-day median breaks the inference.
+- FOBXX: leaves reconcile; R1-R4 accepted on-chain, flagged off-chain; a
+  USD 100 m receipt mint moves BCR only 99.68 -> 99.72%; daily flows 21/21
+  accepted at 99.5%, 0/21 at 100%; closing liabilities equal the filed
+  USD 667.97 m.
+
+### Not implemented
+
+- Variable redemption price (`P_red != 1`).
+- On-chain aggregate (sum) reconciliation; liquidity-class challenge.
+- Several monthly N-MFP3 filings (only 30 Sep 2026 available).
+
 ## [2.1.0] - 2026-11-01 - Real reserve positions
 
 ### Added

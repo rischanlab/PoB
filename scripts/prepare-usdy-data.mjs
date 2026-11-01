@@ -19,7 +19,7 @@ const INPUT_FILE =
   positional[0] ?? "data/raw/rwa-xyz-treasury-market-caps.csv";
 
 const OUTPUT_CSV =
-  "data/input/usdy-observed-liabilities.csv";
+  "data/input/usdy-observed-token-value.csv";
 
 const OUTPUT_JSON =
   "data/input/usdy-calibration.json";

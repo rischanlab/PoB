@@ -2,7 +2,7 @@
   "reportDate": "2026-09-30",
   "merkleRoot": "0x8f8a056afb9827fa9711b33b5df17010fe9aec9c7a53e7a13fd6c882d56595c1",
   "positions": 85,
-  "submitSnapshotGas": "391392",
+  "submitSnapshotGas": "391404",
   "proofLength": "6-7",
   "verifiedPositions": 85,
   "inconsistentPositions": 0,
@@ -13,7 +13,8 @@
       "rlc": "2006.51",
       "mint1mWithoutReceipt": "false",
       "mint1mWithReceipt": "false",
-      "mintHeadroomUsd": "0.00"
+      "mintHeadroomUsd": "0.00",
+      "bcrAfter100mReceiptMint": "99.72"
     },
     {
       "policy": "minBCR 99.5%, minRLC 100%",
@@ -21,9 +22,91 @@
       "rlc": "2006.51",
       "mint1mWithoutReceipt": "true",
       "mint1mWithReceipt": "true",
-      "mintHeadroomUsd": "1252234.95"
+      "mintHeadroomUsd": "1252234.95",
+      "bcrAfter100mReceiptMint": "99.72"
+    },
+    {
+      "policy": "minBCR 99.7%, minRLC 100%",
+      "bcr": "99.68",
+      "rlc": "2006.51",
+      "mint1mWithoutReceipt": "false",
+      "mint1mWithReceipt": "false",
+      "mintHeadroomUsd": "0.00",
+      "bcrAfter100mReceiptMint": "99.72"
+    },
+    {
+      "policy": "minBCR 99.6%, minRLC 100%",
+      "bcr": "99.68",
+      "rlc": "2006.51",
+      "mint1mWithoutReceipt": "false",
+      "mint1mWithReceipt": "true",
+      "mintHeadroomUsd": "550181.38",
+      "bcrAfter100mReceiptMint": "99.72"
+    },
+    {
+      "policy": "minBCR 99.0%, minRLC 100%",
+      "bcr": "99.68",
+      "rlc": "2006.51",
+      "mint1mWithoutReceipt": "true",
+      "mint1mWithReceipt": "true",
+      "mintHeadroomUsd": "4783777.14",
+      "bcrAfter100mReceiptMint": "99.72"
     }
   ],
+  "reconciliation": [
+    {
+      "case": "R0 honest position file",
+      "acceptedOnChain": "true",
+      "challengeableLeaves": "0",
+      "leafVsSignedMismatch": "none",
+      "leafVsFilingMismatch": "none",
+      "bcrSigned": "99.68",
+      "bcrFromLeaves": "99.68"
+    },
+    {
+      "case": "R1 aggregates inflated by USD 20m",
+      "acceptedOnChain": "true",
+      "challengeableLeaves": "0",
+      "leafVsSignedMismatch": "grossReserves 20000000.00; eligibleReserves 20000000.00; liquidAssets 20000000.00",
+      "leafVsFilingMismatch": "none",
+      "bcrSigned": "102.54",
+      "bcrFromLeaves": "99.68"
+    },
+    {
+      "case": "R2 position omitted, aggregates unchanged",
+      "acceptedOnChain": "true",
+      "challengeableLeaves": "0",
+      "leafVsSignedMismatch": "grossReserves 60000000.00; eligibleReserves 60000000.00; liquidAssets 60000000.00",
+      "leafVsFilingMismatch": "grossReserves 60000000.00; count 84 vs 85",
+      "bcrSigned": "99.68",
+      "bcrFromLeaves": "91.08"
+    },
+    {
+      "case": "R3 position omitted, aggregates consistent",
+      "acceptedOnChain": "true",
+      "challengeableLeaves": "0",
+      "leafVsSignedMismatch": "none",
+      "leafVsFilingMismatch": "grossReserves 60000000.00; count 84 vs 85",
+      "bcrSigned": "91.08",
+      "bcrFromLeaves": "91.08"
+    },
+    {
+      "case": "R4 fabricated position, aggregates consistent",
+      "acceptedOnChain": "true",
+      "challengeableLeaves": "0",
+      "leafVsSignedMismatch": "none",
+      "leafVsFilingMismatch": "grossReserves 20000000.00; count 86 vs 85",
+      "bcrSigned": "102.54",
+      "bcrFromLeaves": "102.54"
+    }
+  ],
+  "reviewerExample": {
+    "signedBcr": "111.11",
+    "leafBcr": "88.89",
+    "acceptedOnChain": true,
+    "challengeSucceeds": false,
+    "offchainReconciliationFlags": true
+  },
   "challenges": [
     {
       "tamper": "repo pledged elsewhere but counted",

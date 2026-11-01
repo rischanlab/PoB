@@ -1,0 +1,8 @@
+id,threat,setting,outcome,evidence
+T1,Absent or withholding signer,role-scoped,prevented (safety); liveness lost,4-of-5 signatures rejected (InvalidSignatureCount); after expiry canMint=false and new redemptions queue; existing claim still settles
+T2a,Compromised single key (verifier),role-scoped,prevented,inflated eligible reserves need the valuation-agent claim; snapshot rejected
+T2b,Compromised single key (verifier),single attestor,not prevented,one signature publishes eligible 150 instead of 100; a 40 mint becomes allowed
+T3,Compromised governance (DEFAULT_ADMIN_ROLE),role-scoped,logged; governance remedy only,"admin re-assigned all five roles to attacker keys, published eligible 150 and lowered thresholds; RoleGranted/RoleRevoked/PolicyUpdated events emitted"
+T4,Collusion of all roles / consistent false statement,role-scoped,out-of-scope (on-chain),accepted; detectable only by off-chain reconciliation against the position file or external records
+T5,Role reassignment / one key holding two roles,role-scoped,prevented; logged,revoked custodian rejected (SignerHasNoRequiredRole); one address with two roles rejected (SignerHasMultipleRequiredRoles); five addresses of one institution cannot be distinguished
+T6,Snapshot expiry during redemptions,role-scoped,prevented (fail-safe),after expiry new requests are queued and minting stops; settlement of earlier claims continues within attested liquidity

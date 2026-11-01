@@ -34,7 +34,7 @@ import { describe, it } from "node:test";
 import hre from "hardhat";
 import { keccak256, toBytes, type Hex } from "viem";
 
-import { POLICY_HASH, WAD, signSnapshot, signSubscriptionReceipt } from "./helpers.js";
+import { POLICY_HASH, WAD, signSnapshot, signSnapshotV1, signSubscriptionReceipt } from "./helpers.js";
 
 const { viem, networkHelpers } = await hre.network.create();
 
@@ -47,7 +47,7 @@ const RESERVE_ROOT = keccak256(toBytes("real-data replay reserve ladder"));
 type Obs = { date: string; value: number };
 
 async function loadLiabilities(): Promise<Obs[]> {
-  const text = await readFile("data/input/usdy-observed-liabilities.csv", "utf8");
+  const text = await readFile("data/input/usdy-observed-token-value.csv", "utf8");
   const [header, ...lines] = text.trim().split("\n");
   const cols = header.split(",");
   const iDate = cols.indexOf("date");
@@ -144,11 +144,11 @@ function median(xs: number[]): number {
 }
 
 /** Observed change minus estimated accrual = net subscription/redemption. */
-function deriveFlows(obs: Obs[], cleaned: boolean) {
+function deriveFlows(obs: Obs[], cleaned: boolean, accrualWindow = 31) {
   const growth = obs.map((o, i) => (i === 0 ? 0 : o.value / obs[i - 1].value - 1));
   const accrual = obs.map((_, i) => {
     if (i === 0) return 0;
-    const window = growth.slice(Math.max(1, i - 30), i + 1);
+    const window = growth.slice(Math.max(1, i - (accrualWindow - 1)), i + 1);
     return median(window);
   });
   const flow = obs.map((o, i) =>
@@ -182,6 +182,23 @@ function deriveFlows(obs: Obs[], cleaned: boolean) {
   return { accrual, flow, netted };
 }
 
+/**
+ * Alternative inference that does not use the series itself for accrual:
+ * daily accrual = (4-week bill bank-discount rate - 0.50%/yr fee) / 365.
+ * The fee is an assumption, not USDY's disclosed fee.
+ */
+function deriveFlowsTbill(obs: Obs[], curves: Map<string, Curve>, cleaned: boolean) {
+  const accrual = obs.map((o, i) =>
+    i === 0 ? 0 : Math.max(0, discountRate(curveForDate(curves, o.date), 28) - 0.005) / 365,
+  );
+  const flow = obs.map((o, i) => (i === 0 ? 0 : o.value - obs[i - 1].value * (1 + accrual[i])));
+  for (let i = 1; i < obs.length; i++) {
+    if (Math.abs(flow[i]) < 1e-5 * obs[i - 1].value) flow[i] = 0;
+  }
+  void cleaned;
+  return { accrual, flow, netted: 0 };
+}
+
 // --------------------------------------------------------------- model ----
 
 type Config = {
@@ -200,6 +217,13 @@ type Config = {
   ladderDays: number; // equal-weight bill ladder 1..ladderDays; reinvest at ladderDays
   etfShareBps: number; // short-Treasury ETF sleeve (share of gross), sold T+1
   etfDurationDays: number; // ETF price sensitivity used for its haircut
+  // Ablation and robustness (review points 3, 5, 8)
+  attestation: "role-scoped" | "single"; // single = SingleAttestorController
+  mintRule: "receipt" | "no-receipt"; // no-receipt: cash counted only at the next snapshot
+  liquidityPolicy: boolean; // false: no RLC gate (minimum RLC set to 1 wei)
+  persistent: boolean; // one controller for the whole run (unit price, no liability accrual)
+  accrualWindow: number; // trailing window (days) for the accrual median
+  accrualSource: "series" | "tbill"; // tbill: accrual = 4-week bill rate minus 0.50%/yr
 };
 
 const BASE: Config = {
@@ -218,6 +242,12 @@ const BASE: Config = {
   ladderDays: 182,
   etfShareBps: 0,
   etfDurationDays: 146,
+  attestation: "role-scoped",
+  mintRule: "receipt",
+  liquidityPolicy: true,
+  persistent: false,
+  accrualWindow: 31,
+  accrualSource: "series",
 };
 
 /**
@@ -248,7 +278,10 @@ async function runReplay(cfg: Config, obs: Obs[], curves: Map<string, Curve>) {
   const client = await viem.getPublicClient();
   const chainId = await client.getChainId();
 
-  const { flow, accrual, netted } = deriveFlows(obs, cfg.cleaned);
+  const { flow, accrual, netted } =
+    cfg.accrualSource === "tbill"
+      ? deriveFlowsTbill(obs, curves, cfg.cleaned)
+      : deriveFlows(obs, cfg.cleaned, cfg.accrualWindow);
   const horizon = FULL ? obs.length : Math.min(70, obs.length);
 
   // Initial portfolio: cash target + ETF sleeve + equal-weight bill ladder.
@@ -312,6 +345,7 @@ async function runReplay(cfg: Config, obs: Obs[], curves: Map<string, Curve>) {
     rlcBelowThresholdDays: 0,
     maxQueueAgeDays: 0,
     redemptionsCapped: 0,
+    liabilityConservationViolations: 0,
   };
   const daily: string[] = [];
 
@@ -348,7 +382,10 @@ async function runReplay(cfg: Config, obs: Obs[], curves: Map<string, Curve>) {
         cash += face;
         bills.delete(day);
       }
-      tokens *= 1 + accrual[day];
+      // Unit redemption price: in the persistent run the token liability
+      // does not accrue (the contract has no redemption-price update), so
+      // the reserve yield stays with the issuer and is swept.
+      if (!cfg.persistent) tokens *= 1 + accrual[day];
       // ETF sleeve accrues at the 4-week bill rate (money-market-like).
       etf *= 1 + discountRate(curveForDate(curves, obs[day].date), 28) / 360;
       for (const c of claims) void c; // pending claims do not accrue
@@ -387,17 +424,24 @@ async function runReplay(cfg: Config, obs: Obs[], curves: Map<string, Curve>) {
       }
     }
 
-    // (c) signed snapshot at the configured cadence (fresh deployment per
-    //     interval; carried pending claims are re-registered on-chain).
-    if (day % cfg.snapshotEveryDays === 0) {
-      const contractName = "PoBPolicyController";
+    // (c) signed snapshot at the configured cadence. Default: fresh
+    //     deployment per interval, carried pending claims re-registered
+    //     on-chain. Persistent: one deployment; the new snapshot must pass
+    //     the liability-continuity check against the controller's state.
+    const reuse = cfg.persistent && controller !== undefined;
+    if (day % cfg.snapshotEveryDays === 0 && !reuse) {
       const maxAge = BigInt(cfg.snapshotEveryDays + 1) * DAY;
-      controller = await viem.deployContract(contractName, [
+      const args = [
         POLICY_HASH,
         BigInt(Math.round(cfg.thetaS * 1e6)) * 10n ** 12n,
         BigInt(Math.round(cfg.thetaL * 1e6)) * 10n ** 12n,
         maxAge,
-      ]);
+      ] as const;
+      // Ablation variants use AblationController (identical accounting).
+      controller =
+        cfg.attestation === "single" || !cfg.liquidityPolicy
+          ? await viem.deployContract("AblationController", [...args, cfg.attestation === "single", cfg.liquidityPolicy])
+          : await viem.deployContract("PoBPolicyController", [...args]);
       const roles = [
         ["CUSTODIAN_ROLE", custodian],
         ["ADMINISTRATOR_ROLE", administrator],
@@ -412,6 +456,9 @@ async function runReplay(cfg: Config, obs: Obs[], curves: Map<string, Curve>) {
           account: admin.account,
         });
       }
+    }
+    if (day % cfg.snapshotEveryDays === 0) {
+      const maxAge = BigInt(cfg.snapshotEveryDays + 1) * DAY;
       const { gross, eligible, liquid } = liquidAndValues(day);
       const carried = pendingTotal();
       const now = (await client.getBlock()).timestamp;
@@ -424,11 +471,17 @@ async function runReplay(cfg: Config, obs: Obs[], curves: Map<string, Curve>) {
         grossReserves: toWad(gross),
         eligibleReserves: toWad(eligible),
         liquidAssets: toWad(liquid),
-        tokenLiabilities: toWad(tokens) + claims.reduce((s, c) => s + toWad(c.amount), 0n),
-        pendingRedemptions: 0n,
+        tokenLiabilities: reuse
+          ? await controller.read.currentTokenLiabilities()
+          : toWad(tokens) + claims.reduce((s, c) => s + toWad(c.amount), 0n),
+        pendingRedemptions: reuse ? await controller.read.currentPendingRedemptions() : 0n,
         otherLiabilities: 0n,
       };
-      const signatures = await signSnapshot(signers, chainId, controller.address, snapshot);
+      if (reuse) tokens = fromWad(snapshot.tokenLiabilities); // stay on the on-chain ledger
+      const signatures =
+        cfg.attestation === "single"
+          ? await signSnapshotV1([verifier], chainId, controller.address, snapshot)
+          : await signSnapshot(signers, chainId, controller.address, snapshot);
       const hash = await controller.write.submitSnapshot([snapshot, signatures], {
         account: admin.account,
       });
@@ -437,11 +490,13 @@ async function runReplay(cfg: Config, obs: Obs[], curves: Map<string, Curve>) {
       snapshotEpoch = snapshot.epoch;
       m.snapshots += 1;
       void carried;
-      for (const c of claims) {
-        await controller.write.requestRedemption([holder.account.address, toWad(c.amount)], {
-          account: admin.account,
-        });
-        c.id = (await controller.read.nextRedemptionId()) - 1n;
+      if (!reuse) {
+        for (const c of claims) {
+          await controller.write.requestRedemption([holder.account.address, toWad(c.amount)], {
+            account: admin.account,
+          });
+          c.id = (await controller.read.nextRedemptionId()) - 1n;
+        }
       }
     }
 
@@ -479,7 +534,9 @@ async function runReplay(cfg: Config, obs: Obs[], curves: Map<string, Curve>) {
           m.billSalesForSettlementUsd += sellFace * p;
         }
       }
-      const amountWad = toWad(pay);
+      const rec = await controller.read.redemptions([c.id]);
+      const remainingWad: bigint = rec[1] - rec[2];
+      const amountWad = toWad(pay) < remainingWad ? toWad(pay) : remainingWad;
       const hash = await controller.write.confirmSettlement([c.id, amountWad], {
         account: admin.account,
       });
@@ -519,12 +576,19 @@ async function runReplay(cfg: Config, obs: Obs[], curves: Map<string, Curve>) {
       const received = toWad(f + topUp);
       const v1After = (snapshotEligible + credited + f + topUp) / (liabNow + f);
       const trueAfter = (snapshotEligible + credited - consumed + f + topUp) / (liabNow + f);
-      const ok: boolean = await controller.read.canMintWithReceipt([amount, received]);
+      const ok: boolean =
+        cfg.mintRule === "receipt"
+          ? await controller.read.canMintWithReceipt([amount, received])
+          : await controller.read.canMint([amount]);
       if (!ok) {
         const bcrNow = Number(((await controller.read.currentBCR()) * 1_000_000n) / WAD) / 1e6;
         const rlcNow = await controller.read.currentRLC();
-        if (trueAfter < cfg.thetaS) m.rejectedBcr += 1;
-        if (rlcNow < BigInt(Math.round(cfg.thetaL * 1e6)) * 10n ** 12n) m.rejectedRlc += 1;
+        const bcrAfter =
+          cfg.mintRule === "receipt"
+            ? trueAfter
+            : Number(((await controller.read.bcrAfterMint([amount])) * 1_000_000n) / WAD) / 1e6;
+        if (bcrAfter < cfg.thetaS) m.rejectedBcr += 1;
+        if (cfg.liquidityPolicy && rlcNow < BigInt(Math.round(cfg.thetaL * 1e6)) * 10n ** 12n) m.rejectedRlc += 1;
         void bcrNow;
       }
       if (v1After >= cfg.thetaS && !ok) m.v1WouldAcceptV2Rejects += 1;
@@ -532,17 +596,24 @@ async function runReplay(cfg: Config, obs: Obs[], curves: Map<string, Curve>) {
         m.v1UnsafeMints += 1;
         m.v1UnsafeMintUsd += f;
       }
-      if (ok) {
-        const nonce = BigInt(day);
-        const receipt = await signSubscriptionReceipt(custodian, chainId, controller.address, {
-          epoch: snapshotEpoch,
-          amount: received,
-          nonce,
-        });
-        const hash = await controller.write.authorizeMintWithReceipt([amount, received, nonce, receipt], {
-          account: admin.account,
-        });
+      if (ok && cfg.mintRule === "no-receipt") {
+        // Cash arrives off-chain and is attested only at the next snapshot.
+        const hash = await controller.write.authorizeMint([amount], { account: admin.account });
         gas.authorizeMintWithReceipt.push((await client.getTransactionReceipt({ hash })).gasUsed);
+      }
+      if (ok) {
+        if (cfg.mintRule === "receipt") {
+          const nonce = BigInt(day);
+          const receipt = await signSubscriptionReceipt(custodian, chainId, controller.address, {
+            epoch: snapshotEpoch,
+            amount: received,
+            nonce,
+          });
+          const hash = await controller.write.authorizeMintWithReceipt([amount, received, nonce, receipt], {
+            account: admin.account,
+          });
+          gas.authorizeMintWithReceipt.push((await client.getTransactionReceipt({ hash })).gasUsed);
+        }
         // v2 safety: post-mint true BCR (all cash movements) meets theta_S.
         const v2Bcr = Number(((await controller.read.currentBCR()) * 1_000_000n) / WAD) / 1e6;
         if (v2Bcr < cfg.thetaS) {
@@ -612,6 +683,13 @@ async function runReplay(cfg: Config, obs: Obs[], curves: Map<string, Curve>) {
       m.daysWithPending += 1;
       if (rlc < cfg.thetaL) m.rlcBelowThresholdDays += 1;
     }
+    if (cfg.persistent) {
+      // Liability conservation on the persistent controller: on-chain total
+      // liabilities equal the off-chain ledger (tokens + open claims).
+      const onTotal = fromWad(await controller.read.currentTotalLiabilities());
+      const ledger = tokens + pendingTotal();
+      if (Math.abs(onTotal - ledger) > 1 + 1e-6 * ledger) m.liabilityConservationViolations += 1;
+    }
     const { gross, eligible, liquid } = liquidAndValues(day);
     // Consistency of the on-chain view with the modelled portfolio: the
     // controller should never see more liquid or eligible value than exists.
@@ -674,12 +752,37 @@ describe(`Real-data replay (${FULL ? "full 1,043 days" : "70-day smoke run"})`, 
           { ...BASE, name: "cleaned-series", cleaned: true },
           { ...BASE, ...ONDO_MIX, name: "ondo-mix" },
           { ...BASE, ...ONDO_MIX, name: "ondo-mix-encumbered-4pct", encumberedBps: 400 },
+          // Ablation (review point 3): same data, thresholds and event sequence.
+          { ...BASE, name: "ablation-A1-bcr-only", attestation: "single", mintRule: "no-receipt", liquidityPolicy: false },
+          { ...BASE, name: "ablation-A2-bcr-rlc", attestation: "single", mintRule: "no-receipt" },
+          { ...BASE, name: "ablation-A3-bcr-rlc-receipts", attestation: "single" },
+          { ...BASE, name: "ablation-A1-bcr-only-encumbered-4pct", attestation: "single", mintRule: "no-receipt", liquidityPolicy: false, encumberedBps: 400 },
+          // Encumbrance sweep around the threshold crossing (review point 5).
+          ...[100, 200, 250, 300, 350].map((b) => ({ ...BASE, name: `encumbered-${b / 100}pct`, encumberedBps: b })),
+          // Alternative accrual estimates (review point 5).
+          { ...BASE, name: "accrual-7d", accrualWindow: 7 },
+          { ...BASE, name: "accrual-91d", accrualWindow: 91 },
+          { ...BASE, name: "accrual-tbill", accrualSource: "tbill" },
+          // One persistent controller for the whole series (review point 8).
+          { ...BASE, name: "persistent", persistent: true },
+          { ...BASE, name: "persistent-encumbered-4pct", persistent: true, encumberedBps: 400 },
+          // Valuation haircut under a 200 bp instead of 100 bp rate shock.
+          { ...BASE, name: "haircut-200bp", rateShockBps: 200 },
         ]
-      : [{ ...BASE }, { ...BASE, name: "encumbered-4pct", encumberedBps: 400 }];
+      : [
+          { ...BASE },
+          { ...BASE, name: "encumbered-4pct", encumberedBps: 400 },
+          { ...BASE, name: "ablation-A1-bcr-only", attestation: "single", mintRule: "no-receipt", liquidityPolicy: false },
+          { ...BASE, name: "persistent", persistent: true },
+        ];
 
+    // RWA_POB_CONFIGS=name1,name2 runs only those configurations and writes
+    // to *-subset.csv files (for re-running single sensitivity cases).
+    const only = process.env.RWA_POB_CONFIGS?.split(",").filter(Boolean);
+    const selected = only ? configs.filter((c) => only.includes(c.name)) : configs;
     const rows: string[] = [];
     const gasRows: string[] = [];
-    for (const cfg of configs) {
+    for (const cfg of selected) {
       const r = await runReplay(cfg, obs, curves);
       const m = r.metrics;
       // Accounting sanity: every request is classified exactly once.
@@ -690,6 +793,7 @@ describe(`Real-data replay (${FULL ? "full 1,043 days" : "70-day smoke run"})`, 
       // modelled portfolio holds (conservative between-snapshot view).
       assert.equal(m.onchainLiquidAboveActualDays, 0);
       assert.equal(m.onchainEligibleAboveActualDays, 0);
+      assert.equal(m.liabilityConservationViolations, 0);
       rows.push(
         [
           cfg.name,
@@ -735,12 +839,18 @@ describe(`Real-data replay (${FULL ? "full 1,043 days" : "70-day smoke run"})`, 
           (m.v1UnsafeMintUsd / 1e6).toFixed(2),
           m.maxBcrOverstatementPp.toFixed(2),
           m.redemptionsCapped,
+          cfg.attestation,
+          cfg.mintRule,
+          cfg.liquidityPolicy,
+          cfg.persistent,
+          cfg.accrualSource === "tbill" ? "tbill" : cfg.accrualWindow,
+          m.liabilityConservationViolations,
         ].join(","),
       );
       gasRows.push(
         [cfg.name, r.gas.submitSnapshot, r.gas.authorizeMintWithReceipt, r.gas.requestRedemption, r.gas.confirmSettlement].join(","),
       );
-      if (FULL && cfg.name === "baseline") {
+      if (FULL && cfg.name === "baseline" && !only) {
         await mkdir("data/results", { recursive: true });
         await writeFile(
           "data/results/real-replay-daily-baseline.csv",
@@ -755,13 +865,14 @@ describe(`Real-data replay (${FULL ? "full 1,043 days" : "70-day smoke run"})`, 
       "config,days,snapshots,buffer_pct,theta_s_pct,settlement_delay_days,snapshot_every_days,encumbered_pct,cleaned,round_trips_netted," +
       "subscription_days,por_mint_accepted,pob_mint_accepted,pob_mint_rejected,pob_rejected_usd_m,por_accept_pob_reject," +
       "redemption_requests,redemption_usd_m,instant,queued,queued_usd_m,settlement_days_deferred,max_claim_age_days,bill_sales_for_settlement_usd_m," +
-      "min_bcr_pct,max_bcr_pct,days_bcr_below_threshold,min_rlc_pct,days_with_pending,days_rlc_below_threshold,days_onchain_liquid_above_actual,days_onchain_eligible_above_actual,unsafe_mints,unsafe_mint_usd_m,rejected_bcr,rejected_rlc,issuer_topup_usd_m,swept_usd_m,v1_accept_v2_reject,v1_unsafe_mints,v1_unsafe_mint_usd_m,max_v1_bcr_overstatement_pp,redemptions_capped";
-    const out = FULL ? "data/results/real-replay-summary.csv" : "data/results/real-replay-smoke.csv";
+      "min_bcr_pct,max_bcr_pct,days_bcr_below_threshold,min_rlc_pct,days_with_pending,days_rlc_below_threshold,days_onchain_liquid_above_actual,days_onchain_eligible_above_actual,unsafe_mints,unsafe_mint_usd_m,rejected_bcr,rejected_rlc,issuer_topup_usd_m,swept_usd_m,v1_accept_v2_reject,v1_unsafe_mints,v1_unsafe_mint_usd_m,max_v1_bcr_overstatement_pp,redemptions_capped,attestation,mint_rule,liquidity_policy,persistent,accrual,liability_conservation_violations";
+    const suffix = only ? "-subset" : "";
+    const out = FULL ? `data/results/real-replay-summary${suffix}.csv` : `data/results/real-replay-smoke${suffix}.csv`;
     await mkdir("data/results", { recursive: true });
     await writeFile(out, `${header}\n${rows.join("\n")}\n`);
     await writeFile(
-      FULL ? "data/results/real-replay-gas.csv" : "data/results/real-replay-gas-smoke.csv",
-      `config,mean_gas_submit_snapshot,mean_gas_authorize_mint_with_receipt,mean_gas_request_redemption,mean_gas_confirm_settlement\n${gasRows.join("\n")}\n`,
+      FULL ? `data/results/real-replay-gas${suffix}.csv` : `data/results/real-replay-gas-smoke${suffix}.csv`,
+      `config,mean_gas_submit_snapshot,mean_gas_mint_authorization,mean_gas_request_redemption,mean_gas_confirm_settlement\n${gasRows.join("\n")}\n`,
     );
   });
 });

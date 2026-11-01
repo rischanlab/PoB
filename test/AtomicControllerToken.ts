@@ -8,6 +8,7 @@ import {
   WAD,
   makeSnapshot,
   signSnapshot,
+  signSubscriptionReceipt,
   type Snapshot,
   usd,
 } from "./helpers.js";
@@ -170,6 +171,37 @@ describe("Atomic controller-token integration", function () {
       await env.controller.read.currentTokenLiabilities(),
       liabilityBefore + amount,
     );
+  });
+
+  it("issues against a custodian receipt atomically (issueWithReceipt)", async function () {
+    const env = await networkHelpers.loadFixture(deployAtomicFixture);
+    await submitValidSnapshot(env);
+    const amount = usd("1000000");
+    const cash = usd("1030000");
+    const eligibleBefore = (await env.controller.read.currentEligibleReserves()) as bigint;
+    const sig = await signSubscriptionReceipt(env.snapshotSigners[0], env.chainId, env.controller.address, { epoch: 1n, amount: cash, nonce: 7n });
+    await env.token.write.issueWithReceipt([env.holder.account.address, amount, cash, 7n, sig], { account: env.admin.account });
+    assert.equal(await env.token.read.totalSupply(), amount);
+    assert.equal(await env.controller.read.creditedSubscriptionCash(), cash);
+    assert.equal(await env.controller.read.currentEligibleReserves(), eligibleBefore + cash);
+    // The same receipt cannot be used twice.
+    await assert.rejects(
+      env.token.write.issueWithReceipt([env.holder.account.address, amount, cash, 7n, sig], { account: env.admin.account }),
+    );
+    assert.equal(await env.token.read.totalSupply(), amount);
+  });
+
+  it("rolls back receipt issuance that fails the policy: nothing credited or minted", async function () {
+    const env = await networkHelpers.loadFixture(deployAtomicFixture);
+    await submitValidSnapshot(env);
+    const amount = usd("200000000");
+    const cash = usd("1000000");
+    const sig = await signSubscriptionReceipt(env.snapshotSigners[0], env.chainId, env.controller.address, { epoch: 1n, amount: cash, nonce: 8n });
+    await assert.rejects(
+      env.token.write.issueWithReceipt([env.holder.account.address, amount, cash, 8n, sig], { account: env.admin.account }),
+    );
+    assert.equal(await env.token.read.totalSupply(), 0n);
+    assert.equal(await env.controller.read.creditedSubscriptionCash(), 0n);
   });
 
   it("rolls back issuance when no valid snapshot exists", async function () {

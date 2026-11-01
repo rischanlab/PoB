@@ -116,6 +116,16 @@ fund = {
     "maxDailyGrossRedemptions": f"{max(reds):.2f}",
     "max5BusinessDayGrossRedemptions": f"{max5:.2f}",
     "dailyFlows": flows,
+    "dailyLiquidAssets": [
+        {"date": text(d, "totalLiquidAssetsNearPercentDate"),
+         "dailyLiquidAssets": text(d, "totalValueDailyLiquidAssets"),
+         "weeklyLiquidAssets": text(d, "totalValueWeeklyLiquidAssets"),
+         "percentageWeeklyLiquidAssets": text(d, "percentageWeeklyLiquidAssets")}
+        for d in series.iter(NS + "liquidAssetsDetails")],
+    "dailyNavPerShare": [
+        {"date": text(d, "dailyNetAssetValuePerShareDateClass"),
+         "nav": (d.find(NS + "dailyNetAssetValuePerShareClass").text or "").strip()}
+        for d in cls.iter(NS + "dailyNetAssetValuePerShareClass") if d.find(NS + "dailyNetAssetValuePerShareClass") is not None],
     "derived": {
         "sumSecurityValues": f"{sec_total:.2f}",
         "sumDailyLiquidSecurities": f"{dla:.2f}",

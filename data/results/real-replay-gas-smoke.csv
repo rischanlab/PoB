@@ -1,3 +1,5 @@
-config,mean_gas_submit_snapshot,mean_gas_authorize_mint_with_receipt,mean_gas_request_redemption,mean_gas_confirm_settlement
-baseline,350559,113783,0,0
-encumbered-4pct,350554,0,0,0
+config,mean_gas_submit_snapshot,mean_gas_mint_authorization,mean_gas_request_redemption,mean_gas_confirm_settlement
+baseline,350564,113783,0,0
+encumbered-4pct,350567,0,0,0
+ablation-A1-bcr-only,263123,69037,0,0
+persistent,219307,113783,0,0

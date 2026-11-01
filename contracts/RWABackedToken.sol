@@ -57,6 +57,32 @@ contract RWABackedToken is ERC20, AccessControl {
         emit Issued(recipient, amount);
     }
 
+    /// @notice Issues tokens against subscription cash confirmed by a
+    ///         custodian receipt: the controller credits `receivedCash` and
+    ///         records the liability in the same transaction as the mint.
+    /// @dev If the receipt or the policy check fails, nothing is credited and
+    ///      nothing is minted.
+    function issueWithReceipt(
+        address recipient,
+        uint256 amount,
+        uint256 receivedCash,
+        uint256 nonce,
+        bytes calldata custodianSignature
+    ) external onlyRole(ISSUER_ROLE) {
+        if (recipient == address(0)) revert ZeroAddress();
+        if (amount == 0) revert ZeroAmount();
+
+        pobController.authorizeMintWithReceipt(
+            amount,
+            receivedCash,
+            nonce,
+            custodianSignature
+        );
+        _mint(recipient, amount);
+
+        emit Issued(recipient, amount);
+    }
+
     /// @notice Burns a holder's tokens and atomically reclassifies the same
     ///         value as a pending redemption in the controller.
     /// @dev The burn is rolled back if the controller rejects the request.

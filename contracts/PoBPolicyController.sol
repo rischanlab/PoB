@@ -419,7 +419,7 @@ contract PoBPolicyController is AccessControl, EIP712 {
         return (currentEligibleReserves() * WAD) / postMintLiabilities;
     }
 
-    function canMint(uint256 mintLiability) public view returns (bool) {
+    function canMint(uint256 mintLiability) public view virtual returns (bool) {
         if (!isSnapshotFresh() || mintLiability == 0) {
             return false;
         }
@@ -435,6 +435,7 @@ contract PoBPolicyController is AccessControl, EIP712 {
     function canMintWithReceipt(uint256 mintLiability, uint256 receivedCash)
         public
         view
+        virtual
         returns (bool)
     {
         if (!isSnapshotFresh() || mintLiability == 0) {
@@ -518,6 +519,7 @@ contract PoBPolicyController is AccessControl, EIP712 {
     function redemptionDisposition(uint256 redemptionValue)
         public
         view
+        virtual
         returns (RedemptionDisposition)
     {
         if (!isSnapshotFresh()) {
@@ -830,7 +832,7 @@ contract PoBPolicyController is AccessControl, EIP712 {
         Snapshot calldata snapshot,
         bytes32 fullSnapshotDigest,
         bytes[] calldata signatures
-    ) internal view {
+    ) internal view virtual {
         if (signatures.length != REQUIRED_SIGNATURES) {
             revert InvalidSignatureCount();
         }

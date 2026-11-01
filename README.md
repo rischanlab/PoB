@@ -17,10 +17,12 @@ The prototype compares:
 
 > **Research disclaimer:** This repository is not an audit of USDY, does not
 > reconstruct USDY's actual reserve portfolio, and is not production-ready
-> financial software. The real-data replay uses the public USDY liability
-> series and official U.S. Treasury bill rates; the reserve portfolio itself
-> is modelled because position-level holdings are not public. Credential
-> states and signers are simulated test accounts.
+> financial software. The replay is a historical-data-driven simulation: it
+> uses USDY's observed token value (RWA.xyz Bridged Token Value = bridged
+> supply x issuer NAV) as a *proxy* liability, daily net flows *inferred*
+> from that series, official U.S. Treasury bill rates, and a *modelled*
+> reserve portfolio. The prototype implements only a unit redemption price
+> (`P_red = 1`). Credential states and signers are simulated test accounts.
 
 > **Version 2.0.0 (response to review).** Settlement now reduces eligible
 > reserves, each role signs only its own fields, reserve positions can be
@@ -28,6 +30,14 @@ The prototype compares:
 > subscription cash, and the evaluation adds a 1,043-day on-chain replay on real
 > data. See [`CHANGELOG.md`](CHANGELOG.md) for the full list, results, and the
 > regression test for each review comment.
+
+> **Version 2.2.0 (major revision).** Adds an ablation that isolates each
+> feature (`contracts/test/AblationController.sol`), a persistent-controller
+> replay and a five-epoch continuity test, executed trust/collusion/liveness
+> cases, an off-chain aggregate reconciliation script with omission and
+> fabrication cases, the FOBXX disclosed daily flows on one controller,
+> `issueWithReceipt` on the token, an encumbrance sweep, and alternative
+> accrual assumptions. 62 tests. See [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Main contributions implemented
 
@@ -38,10 +48,13 @@ The prototype compares:
   - legal or trustee role: header (reserve root); and
   - independent verifier: the complete snapshot.
   The header is epoch, as-of time, expiry, policy hash, and reserve root.
-- Permissionless position challenge: a Merkle proof of a committed position
-  that breaks the eligibility rules suspends the snapshot (v2).
+- Permissionless position-level consistency challenge: a Merkle proof of a
+  committed position that breaks the eligibility rules suspends the snapshot
+  (v2). The contract does **not** check that positions add up to the signed
+  totals or that the file is complete; `scripts/reconcile-snapshot.mjs` does
+  that off-chain (v2.2).
 - Custodian-signed subscription receipts, credited atomically with the mint
-  (`authorizeMintWithReceipt`) (v2).
+  (`authorizeMintWithReceipt`, and `RWABackedToken.issueWithReceipt`, v2.2).
 - Settlement reduces liquid, eligible, and gross reserves (v2 fix).
 - A canonical snapshot containing:
   - reporting epoch and timestamps;
@@ -60,8 +73,10 @@ The prototype compares:
 - Pending-redemption accounting until settlement.
 - Aggregate PoR baseline for controlled comparison.
 - Deterministic reserve scenarios using seed `42`.
-- Real-data replay: 1,043 days of USDY liabilities, reserves priced daily from
-  U.S. Treasury Daily Treasury Bill Rates, every decision made on-chain (v2).
+- Historical-data-driven simulated replay: 1,043 days of observed USDY token
+  value (proxy liability) with inferred flows, a modelled portfolio priced
+  daily from U.S. Treasury bill rates, every decision made on-chain (v2);
+  ablation, encumbrance sweep, accrual and persistence variants (v2.2).
 - CSV outputs for policy decisions and gas usage.
 
 ## Architecture
@@ -187,7 +202,7 @@ in the settlement queue.
 │   │   └── rwa-xyz-*.csv                      # ignored by Git
 │   ├── input/
 │   │   ├── usdy-calibration.json
-│   │   ├── usdy-observed-liabilities.csv
+│   │   ├── usdy-observed-token-value.csv
 │   │   └── usdy-scenarios/
 │   └── results/
 │       ├── gas-results.csv
@@ -323,7 +338,7 @@ differed by up to 2.9% on some later days.
 It writes:
 
 ```text
-data/input/usdy-observed-liabilities.csv
+data/input/usdy-observed-token-value.csv
 data/input/usdy-calibration.json
 ```
 
@@ -348,8 +363,10 @@ The processed calibration contains:
 | Source measure | Bridged Token Value (Dollar), summed across 12 chains |
 | Source file | RWA.xyz USDY market-caps export, downloaded 2026-11-01 |
 
-The observed token value calibrates the liability scale. It is not treated as
-independent proof of USDY's legal liabilities or reserves.
+RWA.xyz defines Bridged Token Value (Dollar) as bridged token supply
+multiplied by issuer-reported NAV. The series is used as a proxy liability:
+it is not an issuer record of legal liabilities, and its daily changes mix
+supply, NAV accrual, and bridging adjustments.
 
 ## Deterministic scenario assumptions
 
@@ -443,25 +460,40 @@ backing but queues the tested redemption because liquid assets cover only about
 | `submitSnapshot:liquidity-stress` | 206,076 |
 | `baselineReport:liquidity-stress` | 37,801 |
 
-## Real-data replay (v2)
+## Historical-data-driven simulated replay (v2, extended in v2.2)
 
 ```bash
 npm run validate:treasury   # 750 rows, 4,864 checks, 0 mismatches
-npm run experiment:real     # full 1,043-day replay, 11 configurations
+npm run experiment:real     # full 1,043-day replay, 26 configurations
 ```
 
-`test/RealDataReplay.ts` replays the observed USDY net flows (observed change
-minus estimated accrual) day by day against a modelled 2% cash + 26-week
+`test/RealDataReplay.ts` replays the *inferred* USDY net flows (observed
+change minus estimated accrual) day by day against a modelled 2% cash + 26-week
 Treasury-bill ladder priced from the official daily bill curve. Each snapshot,
 mint (with a custodian receipt), redemption, and settlement goes through the
 deployed controller. Baseline results (`data/results/real-replay-summary.csv`):
 
 | | Aggregate PoR | RWA-PoB |
 |---|---:|---:|
-| Mints accepted (of 343 subscription days) | 343 | 327 |
-| Mints accepted, 4% encumbered | 343 | 0 |
-| Unsafe mints (post-mint BCR < 101%) | not checked | 0 |
-| Unsafe mints under v1 settlement logic, 4% encumbered | | 43 (USD 9.60 m) |
+| Mints accepted (of 343 inferred inflow days) | 343 | 327 |
+| Mints accepted, 4% encumbered (hypothetical stress) | 343 | 0 |
+| Unsafe mints (post-mint BCR < 101%), all 26 runs | not checked | 0 |
+| Inferred mints satisfying the *reconstructed* v1 rule below threshold, 4% encumbered | | 43 (USD 9.60 m) |
+
+Ablation (same data and thresholds):
+
+| Policy | Mints | Rejected BCR/RLC | Queued | Max claim age | Mints at 4% | Snapshot gas | One compromised key |
+|---|---:|---:|---:|---:|---:|---:|---|
+| Gross PoR | 343 | - | - | - | 343 | - | not prevented |
+| A1 eligible BCR, single attestor, no RLC, no receipts | 289 | 54/0 | 0 | 61 | 0 | 262,584 | not prevented |
+| A2 + RLC policy | 214 | 54/93 | 78 | 75 | n/r | 259,897 | not prevented |
+| A3 + receipts | 327 | 0/16 | 7 | 37 | n/r | 262,750 | not prevented |
+| Full RWA-PoB (role-scoped) | 327 | 0/16 | 7 | 37 | 0 | 350,193 | prevented |
+
+Encumbrance sweep (PoB mints): 0% 327, 1% 327, 2% 26, 2.5% 12, 3% 6, 3.5% 3,
+4% 0. Accrual: 91-day median 354 of 370 inferred inflows, T-bill-based 475
+of 492; a 7-day median breaks the flow inference (reported as fragility).
+Persistent controller: 327 accepted, 0 conservation violations.
 
 All configurations and the model assumptions are in
 [`CHANGELOG.md`](CHANGELOG.md). Without the `RWA_POB_REAL_REPLAY=1` flag
@@ -496,21 +528,30 @@ holdings PDF to the dollar.
 | BCR after haircuts | 99.68% |
 | RLC against the largest 5-day redemptions in Sep 2026 (USD 24.27 m) | 2,006.51% |
 | Mint of USD 1 m, minBCR 100% | rejected (with or without receipt) |
-| Mint of USD 1 m, minBCR 99.5% | accepted; headroom without new cash USD 1.25 m |
-| `submitSnapshot` gas | 391,392 |
+| Mint of USD 1 m, minBCR 99.7 / 99.6 / 99.5% (sensitivity) | no receipt: R / R / A; with receipt: R / A / A |
+| BCR after a USD 100 m receipt-backed mint | 99.72% (a receipt cannot lift BCR above 100%) |
+| Leaves vs signed totals vs filing (`npm run reconcile:franklin`) | reconciled |
+| Disclosed Sep-2026 daily flows on one controller, minBCR 99.5% / 100% | 21 / 0 of 21 subscription days accepted |
+| `submitSnapshot` gas | 391,404 |
 
 A 1:1 government money fund has no over-collateralisation and carries its
 securities at amortised cost, so at market value with haircuts its BCR is just
-below 100%. The policy threshold must follow the product: a ≥100% BCR fits an
-over-collateralised note such as USDY; a fund share needs a threshold such as
-99.5% (the half-cent band of Rule 2a-7) and receipt-backed minting.
+below 100%. The thresholds below 100% are researcher-selected sensitivity
+values. Rule 2a-7's one-half-of-one-percent figure (17 CFR 270.2a-7(g)(1)(i))
+is a share-price deviation that triggers board consideration; it is not a
+coverage ratio for issuing tokens.
+
+Reconciliation cases (`real-position-reconciliation.csv`): inflated totals
+(R1) and an omission with unchanged totals (R2) are flagged by comparing
+leaves with signed totals; an omission or fabrication with consistent totals
+(R3, R4) only by comparing with the filing. All are accepted on-chain.
 
 Five tampered versions of real positions are each caught by a permissionless
 challenge that suspends minting (`data/results/real-position-challenges.csv`,
 66,000-67,556 gas): a repo pledged elsewhere but counted, receivables counted
 as eligible, an unsettled bill counted, a haircut skipped, and liquid value
 above eligible value. A non-weekly-liquid note reported as liquid is *not*
-caught, because the contract does not check liquidity against maturity; this
+caught, because the contract does not test liquidity classification; this
 is listed as a limitation. A simple maturity rule would not fix it: 35 of the
 fund's 40 weekly-liquid positions (USD 288.90 m) mature after 7 days (up to
 365), mostly Treasuries that Rule 2a-7 counts as weekly liquid, so the rule
@@ -544,10 +585,13 @@ Import-Csv data\results\gas-results.csv |
 
 ## Tests covered
 
-49 tests pass (`npm test`; Hardhat also lists `test/helpers.ts` as a passing file, so it prints 50), including 14 v2 regression tests in
-`test/V2ReviewFixes.ts` (settlement BCR, role scoping, Merkle challenge,
-subscription receipts) and 3 tests on the real FOBXX position snapshot in
-`test/RealPositionSnapshot.ts`. The controller unit tests verify:
+62 tests pass (`npm test`; Hardhat also lists `test/helpers.ts` as a passing
+file, so it prints 63). The per-file inventory is in
+[`REPRODUCIBILITY.md`](REPRODUCIBILITY.md). They include 14 v2 regression
+tests in `test/V2ReviewFixes.ts`, 5 tests on the real FOBXX position file
+(including aggregate reconciliation and the 100/80/90 example), the FOBXX
+daily-flow test, a five-epoch persistent-controller test, and 7 trust-model
+tests. The controller unit tests verify:
 
 - acceptance of a complete and fresh snapshot;
 - rejection of a missing mandatory signature;
@@ -595,8 +639,11 @@ npm ci
 npm run build
 npm run generate:data
 npm run validate:treasury
+npm run reconcile:franklin
 npm test
 npm run experiment
+npm run experiment:trust
+npm run experiment:fobxx-flows
 ```
 
 The resulting CSV files are uploaded as a workflow artifact.
@@ -612,8 +659,16 @@ third-party CSV is not stored in the repository.
   modelled (cash + Treasury-bill ladder priced from real rates) in the replay.
   The real FOBXX snapshot is a single month-end filing; it is not a time
   series, and its haircuts are a policy assumption.
-- The challenge rules do not check liquidity against maturity, so a
-  long-dated position reported as liquid is not caught on-chain.
+- The challenge rules do not check liquidity classification, so a
+  non-weekly-liquid position reported as liquid is not caught on-chain.
+- The contract does not check that positions sum to the signed totals or that
+  the position file is complete; omissions with consistent totals are
+  visible only against an external record (off-chain).
+- Only `P_red = 1` is implemented; variable redemption prices are not.
+- USDY daily flows are inferred, not observed; no public primary-market
+  record was available to validate them.
+- Five signer accounts are not proof of five independent institutions;
+  compromised governance and collusion are not resisted.
 - Institutional signers are simulated test accounts.
 - The experiment does not reconstruct or audit USDY's actual holdings,
   encumbrances, custody accounts, or settlement records.

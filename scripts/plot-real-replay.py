@@ -27,7 +27,7 @@ plt.rcParams.update({"font.size": 8, "axes.edgecolor": MUTED, "axes.labelcolor":
                      "axes.spines.right": False})
 fig, ax = plt.subplots(3, 1, figsize=(7.0, 5.2), sharex=True,
                        gridspec_kw={"height_ratios": [1.2, 1, 0.8]})
-ax[0].plot(d, obs, color=BLUE, lw=1.4, label="Observed USDY value (RWA.xyz)")
+ax[0].plot(d, obs, color=BLUE, lw=1.4, label="Observed USDY token value, RWA.xyz (proxy liability)")
 ax[0].plot(d, mod, color=ORANGE, lw=1.4, ls="--", label="Modelled token liabilities")
 ax[0].set_ylabel("USD billion")
 ax[0].legend(frameon=False, loc="upper left")

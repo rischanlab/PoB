@@ -1,0 +1,6 @@
+case,acceptedOnChain,challengeableLeaves,leafVsSignedMismatch,leafVsFilingMismatch,bcrSigned,bcrFromLeaves
+R0 honest position file,true,0,none,none,99.68,99.68
+R1 aggregates inflated by USD 20m,true,0,grossReserves 20000000.00; eligibleReserves 20000000.00; liquidAssets 20000000.00,none,102.54,99.68
+"R2 position omitted, aggregates unchanged",true,0,grossReserves 60000000.00; eligibleReserves 60000000.00; liquidAssets 60000000.00,grossReserves 60000000.00; count 84 vs 85,99.68,91.08
+"R3 position omitted, aggregates consistent",true,0,none,grossReserves 60000000.00; count 84 vs 85,91.08,91.08
+"R4 fabricated position, aggregates consistent",true,0,none,grossReserves 20000000.00; count 86 vs 85,102.54,102.54

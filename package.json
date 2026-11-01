@@ -19,7 +19,11 @@
     "fetch:treasury": "bash scripts/fetch-treasury-bill-rates.sh",
     "prepare:franklin": "python3 scripts/prepare-franklin-nmfp3.py data/raw/franklin/fobxx-nmfp3-2026-09-30.xml",
     "build:franklin": "node scripts/build-franklin-snapshot.mjs",
-    "experiment:real-positions": "hardhat test test/RealPositionSnapshot.ts"
+    "experiment:real-positions": "hardhat test test/RealPositionSnapshot.ts",
+    "reconcile:franklin": "node scripts/reconcile-snapshot.mjs",
+    "experiment:fobxx-flows": "hardhat test test/FobxxDailyFlows.ts",
+    "experiment:trust": "hardhat test test/TrustModel.ts",
+    "test:persistent": "hardhat test test/PersistentController.ts"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox-viem": "5.0.7",
