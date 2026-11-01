@@ -511,7 +511,12 @@ challenge that suspends minting (`data/results/real-position-challenges.csv`,
 as eligible, an unsettled bill counted, a haircut skipped, and liquid value
 above eligible value. A non-weekly-liquid note reported as liquid is *not*
 caught, because the contract does not check liquidity against maturity; this
-is listed as a limitation.
+is listed as a limitation. A simple maturity rule would not fix it: 35 of the
+fund's 40 weekly-liquid positions (USD 288.90 m) mature after 7 days (up to
+365), mostly Treasuries that Rule 2a-7 counts as weekly liquid, so the rule
+would suspend a sound fund. The leaf would need the regulatory liquidity
+class. The tampering tests show rule coverage on real positions; they are
+not a detection rate, since the rules and the tampering were written together.
 
 ## View result files in PowerShell
 

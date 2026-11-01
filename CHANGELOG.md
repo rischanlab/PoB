@@ -35,7 +35,10 @@ paper comes from the CSV files listed below.
   without new cash is USD 1.25 m. The threshold has to follow the product.
 - Five tampered real positions are caught by a challenge that suspends
   minting (66,000-67,556 gas). A long-dated note reported as liquid is not
-  caught: the challenge rules do not compare liquidity with maturity.
+  caught: the challenge rules do not compare liquidity with maturity. A naive
+  maturity rule would wrongly flag 35 of the fund's 40 weekly-liquid
+  positions (USD 288.90 m, maturities up to 365 days), so detection needs the
+  regulatory liquidity class in each leaf.
 
 
 
