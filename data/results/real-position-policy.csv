@@ -1,0 +1,3 @@
+policy,bcr,rlc,mint1mWithoutReceipt,mint1mWithReceipt,mintHeadroomUsd
+"minBCR 100%, minRLC 100%",99.68,2006.51,false,false,0.00
+"minBCR 99.5%, minRLC 100%",99.68,2006.51,true,true,1252234.95

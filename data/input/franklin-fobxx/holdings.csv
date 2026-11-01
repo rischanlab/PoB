@@ -1,0 +1,86 @@
+line,issuer,identifier,category,value_usd,pct_net_assets,yield,wam_date,wal_date,final_maturity_date,days_to_wam,days_to_wal,days_to_final,daily_liquid,weekly_liquid,illiquid,repo_collateral_usd,principal_usd
+1,Bank of America Corp.,ZS48579,"U.S. Treasury Repurchase Agreement, if collateralized only by U.S. Treasuries (including Strips) and cash",20000000.00,0.0299,0.0389,2026-10-01,2026-10-01,2026-10-01,1,1,1,Y,Y,N,20400096.25,20000000.00
+2,Federal Farm Credit Banks Funding Corp.,3133ETG92,U.S. Government Agency Debt (if categorized as coupon-paying notes),3999981.56,0.0060,0.0401,2026-10-01,2026-10-15,2026-10-15,1,15,15,N,N,N,,4000000.00
+3,U.S. Treasury Bills,912797VN4,U.S. Treasury Debt,4986145.60,0.0075,0.0378,2026-10-27,2026-10-27,2026-10-27,27,27,27,Y,Y,N,,5000000.00
+4,Federal Home Loan Banks,3130BB7B5,U.S. Government Agency Debt (if categorized as coupon-paying notes),4000072.68,0.0060,0.0404,2026-10-01,2027-12-17,2027-12-17,1,443,443,N,N,N,,4000000.00
+5,Federal Farm Credit Banks Funding Corp.,3133ERC66,U.S. Government Agency Debt (if categorized as coupon-paying notes),5009379.35,0.0075,0.0404,2026-10-01,2027-11-19,2027-11-19,1,415,415,N,N,N,,5000000.00
+6,Federal Home Loan Banks,313385P67,U.S. Government Agency Debt (if categorized as no-coupon discount notes),4974411.10,0.0075,0.0364,2026-11-16,2026-11-16,2026-11-16,47,47,47,N,Y,N,,5000000.00
+7,Federal Farm Credit Banks Funding Corp.,3133EWTT7,U.S. Government Agency Debt (if categorized as coupon-paying notes),8999945.55,0.0135,0.0397,2026-10-01,2026-10-22,2026-10-22,1,22,22,N,N,N,,9000000.00
+8,U.S. Treasury Bills,912797SK4,U.S. Treasury Debt,14306993.48,0.0214,0.0379,2026-10-29,2026-10-29,2026-10-29,29,29,29,Y,Y,N,,14350000.00
+9,Federal Farm Credit Banks Funding Corp.,3133EWF54,U.S. Government Agency Debt (if categorized as coupon-paying notes),5900008.67,0.0088,0.0398,2026-10-01,2027-04-14,2027-04-14,1,196,196,N,N,N,,5900000.00
+10,Federal Farm Credit Banks Funding Corp.,3133ETE52,U.S. Government Agency Debt (if categorized as coupon-paying notes),2149926.10,0.0032,0.0399,2026-10-01,2026-11-10,2026-11-10,1,41,41,N,N,N,,2150000.00
+11,Federal Farm Credit Banks Funding Corp.,3133ETWQ6,U.S. Government Agency Debt (if categorized as coupon-paying notes),1000137.75,0.0015,0.0403,2026-10-01,2027-03-05,2027-03-05,1,156,156,N,N,N,,1000000.00
+12,U.S. Treasury Bills,912797VJ3,U.S. Treasury Debt,7918656.08,0.0119,0.0411,2026-12-31,2026-12-31,2026-12-31,92,92,92,Y,Y,N,,8000000.00
+13,Federal Farm Credit Banks Funding Corp.,3133EWTD2,U.S. Government Agency Debt (if categorized as coupon-paying notes),2003137.92,0.0030,0.0409,2026-10-01,2028-06-16,2028-06-16,1,625,625,N,N,N,,2004000.00
+14,Federal Farm Credit Banks Funding Corp.,3133EWYS3,U.S. Government Agency Debt (if categorized as coupon-paying notes),3500021.11,0.0052,0.0401,2026-10-01,2027-08-20,2027-08-20,1,324,324,N,N,N,,3500000.00
+15,Federal Home Loan Banks,313385M45,U.S. Government Agency Debt (if categorized as no-coupon discount notes),5383426.48,0.0081,0.0388,2026-10-29,2026-10-29,2026-10-29,29,29,29,N,Y,N,,5400000.00
+16,Federal National Mortgage Association,3135G07M9,U.S. Government Agency Debt (if categorized as coupon-paying notes),2104103.69,0.0032,0.0403,2026-10-01,2027-11-05,2027-11-05,1,401,401,N,N,N,,2100000.00
+17,Federal Farm Credit Banks Funding Corp.,3133ETYV3,U.S. Government Agency Debt (if categorized as coupon-paying notes),2201449.25,0.0033,0.0401,2026-10-01,2027-09-22,2027-09-22,1,357,357,N,N,N,,2200000.00
+18,U.S. Treasury Bills,912797UZ8,U.S. Treasury Debt,13924460.62,0.0209,0.0370,2026-11-19,2026-11-19,2026-11-19,50,50,50,Y,Y,N,,14000000.00
+19,U.S. Treasury Bills,912797WG8,U.S. Treasury Debt,2675669.98,0.0040,0.0378,2026-12-22,2026-12-22,2026-12-22,83,83,83,Y,Y,N,,2700000.00
+20,U.S. Treasury Bills,912797UJ4,U.S. Treasury Debt,5495942.16,0.0082,0.0374,2026-10-08,2026-10-08,2026-10-08,8,8,8,Y,Y,N,,5500000.00
+21,U.S. Treasury Bills,912797VZ7,U.S. Treasury Debt,8939025.90,0.0134,0.0390,2026-12-01,2026-12-01,2026-12-01,62,62,62,Y,Y,N,,9000000.00
+22,Federal Farm Credit Banks Funding Corp.,3133ET6G7,U.S. Government Agency Debt (if categorized as coupon-paying notes),1499609.30,0.0023,0.0403,2026-10-01,2027-11-05,2027-11-05,1,401,401,N,N,N,,1500000.00
+23,Bank of America Corp.,ZS4856Z,"U.S. Government Agency Repurchase Agreement, collateralized only by U.S. Government Agency securities, U.S. Treasuries, and cash",40000000.00,0.0599,0.0390,2026-10-01,2026-10-01,2026-10-01,1,1,1,Y,Y,N,40800001.02,40000000.00
+24,Federal Home Loan Banks,3130B93C2,U.S. Government Agency Debt (if categorized as coupon-paying notes),7750013.25,0.0116,0.0404,2026-10-01,2028-01-13,2028-01-13,1,470,470,N,N,N,,7750000.00
+25,Federal Home Loan Banks,3130BBFY6,U.S. Government Agency Debt (if categorized as coupon-paying notes),4999990.45,0.0075,0.0398,2026-10-01,2026-12-07,2026-12-07,1,68,68,N,N,N,,5000000.00
+26,Federal National Mortgage Association,3135G1AG6,U.S. Government Agency Debt (if categorized as coupon-paying notes),1599515.87,0.0024,0.0402,2026-10-01,2028-03-06,2028-03-06,1,523,523,N,N,N,,1600000.00
+27,Federal Farm Credit Banks Funding Corp.,3133EWGU8,U.S. Government Agency Debt (if categorized as coupon-paying notes),1300070.07,0.0020,0.0402,2026-10-01,2028-03-13,2028-03-13,1,530,530,N,N,N,,1300000.00
+28,U.S. Treasury Bills,912797VT1,U.S. Treasury Debt,4941061.45,0.0074,0.0388,2027-01-14,2027-01-14,2027-01-14,106,106,106,Y,Y,N,,5000000.00
+29,Federal Farm Credit Banks Funding Corp.,3133ETJ81,U.S. Government Agency Debt (if categorized as coupon-paying notes),6750127.17,0.0101,0.0405,2026-10-01,2027-04-22,2027-04-22,1,204,204,N,N,N,,6750000.00
+30,Federal Farm Credit Banks Funding Corp.,3133EWF62,U.S. Government Agency Debt (if categorized as coupon-paying notes),1300000.14,0.0020,0.0400,2026-10-01,2027-08-17,2027-08-17,1,321,321,N,N,N,,1300000.00
+31,Federal Home Loan Mortgage Corp.,3134HBXW6,U.S. Government Agency Debt (if categorized as coupon-paying notes),8300900.88,0.0124,0.0401,2026-10-01,2027-01-08,2027-01-08,1,100,100,N,N,N,,8300000.00
+32,Federal Home Loan Banks,3130BB3M5,U.S. Government Agency Debt (if categorized as coupon-paying notes),6999025.60,0.0105,0.0402,2026-10-01,2027-09-10,2027-09-10,1,345,345,N,N,N,,7000000.00
+33,Federal Home Loan Banks,3130B7RC0,U.S. Government Agency Debt (if categorized as coupon-paying notes),6571143.77,0.0098,0.0404,2026-10-01,2027-03-16,2027-03-16,1,167,167,N,N,N,,6570000.00
+34,Federal Farm Credit Banks Funding Corp.,3133ERXT3,U.S. Government Agency Debt (if categorized as coupon-paying notes),4000370.72,0.0060,0.0432,2026-10-01,2026-10-16,2026-10-16,1,16,16,N,N,N,,4000000.00
+35,U.S. Treasury Notes,91282CNQ0,U.S. Treasury Debt,8011461.44,0.0120,0.0428,2026-10-01,2027-07-31,2027-07-31,1,304,304,Y,Y,N,,8000000.00
+36,U.S. Treasury Bills,912797VH7,U.S. Treasury Debt,14376719.84,0.0215,0.0380,2026-12-17,2026-12-17,2026-12-17,78,78,78,Y,Y,N,,14500000.00
+37,U.S. Treasury Bills,912797WN3,U.S. Treasury Debt,8408333.71,0.0126,0.0398,2027-01-05,2027-01-05,2027-01-05,97,97,97,Y,Y,N,,8500000.00
+38,U.S. Treasury Bills,912797UM7,U.S. Treasury Debt,17184493.13,0.0257,0.0370,2026-11-05,2026-11-05,2026-11-05,36,36,36,Y,Y,N,,17250000.00
+39,U.S. Treasury Bills,912797UD7,U.S. Treasury Debt,8335462.70,0.0125,0.0355,2027-03-18,2027-03-18,2027-03-18,169,169,169,Y,Y,N,,8500000.00
+40,Federal Home Loan Banks,3130BB5K7,U.S. Government Agency Debt (if categorized as coupon-paying notes),9997428.30,0.0150,0.0400,2026-10-01,2027-06-15,2027-06-15,1,258,258,N,N,N,,10000000.00
+41,U.S. Treasury Bills,912797UY1,U.S. Treasury Debt,22595448.11,0.0338,0.0288,2026-11-12,2026-11-12,2026-11-12,43,43,43,Y,Y,N,,22700000.00
+42,U.S. Treasury Bills,912797SU2,U.S. Treasury Debt,19128013.14,0.0287,0.0371,2026-11-27,2026-11-27,2026-11-27,58,58,58,Y,Y,N,,19250000.00
+43,Federal National Mortgage Association,3135G1AD3,U.S. Government Agency Debt (if categorized as coupon-paying notes),7498728.68,0.0112,0.0402,2026-10-01,2028-01-07,2028-01-07,1,464,464,N,N,N,,7500000.00
+44,Federal Farm Credit Banks Funding Corp.,3133ETGE1,U.S. Government Agency Debt (if categorized as coupon-paying notes),1856246.88,0.0028,0.0402,2026-10-01,2027-05-12,2027-05-12,1,224,224,N,N,N,,1855000.00
+45,Federal Home Loan Banks,313384AW9,U.S. Government Agency Debt (if categorized as no-coupon discount notes),8146675.60,0.0122,0.0365,2027-01-21,2027-01-21,2027-01-21,113,113,113,N,N,N,,8250000.00
+46,U.S. Treasury Notes,91282CAL5,U.S. Treasury Debt,3165344.52,0.0048,0.0443,2027-09-30,2027-09-30,2027-09-30,365,365,365,Y,Y,N,,3300000.00
+47,Federal Home Loan Banks,3130BBUC7,U.S. Government Agency Debt (if categorized as coupon-paying notes),5499972.17,0.0082,0.0397,2026-10-01,2027-02-17,2027-02-17,1,140,140,N,N,N,,5500000.00
+48,U.S. Treasury Bills,912797UL9,U.S. Treasury Debt,4988807.00,0.0075,0.0375,2026-10-22,2026-10-22,2026-10-22,22,22,22,Y,Y,N,,5000000.00
+49,U.S. Treasury Bills,912797TV9,U.S. Treasury Debt,4231463.98,0.0063,0.0384,2027-02-18,2027-02-18,2027-02-18,141,141,141,Y,Y,N,,4300000.00
+50,Federal Home Loan Banks,313385K54,U.S. Government Agency Debt (if categorized as no-coupon discount notes),17189493.05,0.0257,0.0376,2026-10-14,2026-10-14,2026-10-14,14,14,14,N,Y,N,,17215000.00
+51,U.S. Treasury Bills,912797VX2,U.S. Treasury Debt,4476837.06,0.0067,0.0394,2026-11-17,2026-11-17,2026-11-17,48,48,48,Y,Y,N,,4500000.00
+52,U.S. Treasury Bills,912797VG9,U.S. Treasury Debt,8434440.95,0.0126,0.0390,2026-12-10,2026-12-10,2026-12-10,71,71,71,Y,Y,N,,8500000.00
+53,Federal Home Loan Mortgage Corp.,3134HB3V1,U.S. Government Agency Debt (if categorized as coupon-paying notes),4700868.61,0.0070,0.0403,2026-10-01,2027-05-05,2027-05-05,1,217,217,N,N,N,,4700000.00
+54,Federal Farm Credit Banks Funding Corp.,3133EWDQ0,U.S. Government Agency Debt (if categorized as coupon-paying notes),4500006.80,0.0067,0.0400,2026-10-01,2027-08-18,2027-08-18,1,322,322,N,N,N,,4500000.00
+55,U.S. Treasury Bills,912797VP9,U.S. Treasury Debt,4982156.60,0.0075,0.0376,2026-11-03,2026-11-03,2026-11-03,34,34,34,Y,Y,N,,5000000.00
+56,Federal Home Loan Banks,3130BBFX8,U.S. Government Agency Debt (if categorized as coupon-paying notes),5000011.85,0.0075,0.0399,2026-10-01,2027-01-08,2027-01-08,1,100,100,N,N,N,,5000000.00
+57,Federal Farm Credit Banks Funding Corp.,3133ETSZ1,U.S. Government Agency Debt (if categorized as coupon-paying notes),5749023.51,0.0086,0.0401,2026-10-01,2026-10-13,2026-10-13,1,13,13,N,N,N,,5749000.00
+58,Federal Farm Credit Banks Funding Corp.,3133EWZQ6,U.S. Government Agency Debt (if categorized as coupon-paying notes),2299942.27,0.0034,0.0407,2026-10-01,2028-02-25,2028-02-25,1,513,513,N,N,N,,2300000.00
+59,U.S. Treasury Bills,912797UK1,U.S. Treasury Debt,4992587.80,0.0075,0.0377,2026-10-15,2026-10-15,2026-10-15,15,15,15,Y,Y,N,,5000000.00
+60,Federal Home Loan Banks,313384AQ2,U.S. Government Agency Debt (if categorized as no-coupon discount notes),3952563.32,0.0059,0.0364,2027-01-15,2027-01-15,2027-01-15,107,107,107,N,N,N,,4000000.00
+61,Federal Farm Credit Banks Funding Corp.,3133EWC57,U.S. Government Agency Debt (if categorized as coupon-paying notes),2499996.85,0.0037,0.0402,2026-10-01,2027-12-08,2027-12-08,1,434,434,N,N,N,,2500000.00
+62,U.S. Treasury Bills,912797VR5,U.S. Treasury Debt,6744978.17,0.0101,0.0410,2027-08-05,2027-08-05,2027-08-05,309,309,309,Y,Y,N,,7000000.00
+63,Federal Farm Credit Banks Funding Corp.,3133ET2B2,U.S. Government Agency Debt (if categorized as coupon-paying notes),4274461.12,0.0064,0.0402,2026-10-01,2027-09-28,2027-09-28,1,363,363,N,N,N,,4274000.00
+64,U.S. Treasury Notes,91282CMY4,U.S. Treasury Debt,4982324.20,0.0075,0.0385,2027-04-30,2027-04-30,2027-04-30,212,212,212,Y,Y,N,,5000000.00
+65,Federal National Mortgage Association,3135G1AC5,U.S. Government Agency Debt (if categorized as coupon-paying notes),1800076.16,0.0027,0.0402,2026-10-01,2027-12-22,2027-12-22,1,448,448,N,N,N,,1800000.00
+66,U.S. Treasury Bills,912797VW4,U.S. Treasury Debt,2489106.50,0.0037,0.0386,2026-11-10,2026-11-10,2026-11-10,41,41,41,Y,Y,N,,2500000.00
+67,U.S. Treasury Bills,912797TC1,U.S. Treasury Debt,5944329.00,0.0089,0.0405,2026-12-24,2026-12-24,2026-12-24,85,85,85,Y,Y,N,,6000000.00
+68,Federal Home Loan Banks,3130B7LG7,U.S. Government Agency Debt (if categorized as coupon-paying notes),6320375.60,0.0095,0.0401,2026-10-01,2026-11-27,2026-11-27,1,58,58,N,N,N,,6320000.00
+69,Bank of Montreal,ZS4855H,"U.S. Treasury Repurchase Agreement, if collateralized only by U.S. Treasuries (including Strips) and cash",60000000.00,0.0898,0.0389,2026-10-01,2026-10-01,2026-10-01,1,1,1,Y,Y,N,61200008.72,60000000.00
+70,Federal Farm Credit Banks Funding Corp.,3133ETM87,U.S. Government Agency Debt (if categorized as coupon-paying notes),6248967.94,0.0094,0.0403,2026-10-01,2027-04-29,2027-04-29,1,211,211,N,N,N,,6250000.00
+71,Federal Farm Credit Banks Funding Corp.,3133EWA91,U.S. Government Agency Debt (if categorized as coupon-paying notes),6000006.12,0.0090,0.0401,2026-10-01,2027-08-03,2027-08-03,1,307,307,N,N,N,,6000000.00
+72,U.S. Treasury Bills,912797VA2,U.S. Treasury Debt,9433692.85,0.0141,0.0374,2026-12-03,2026-12-03,2026-12-03,64,64,64,Y,Y,N,,9500000.00
+73,Federal Home Loan Banks,313385T22,U.S. Government Agency Debt (if categorized as no-coupon discount notes),7934500.00,0.0119,0.0361,2026-12-14,2026-12-14,2026-12-14,75,75,75,N,N,N,,8000000.00
+74,Federal Home Loan Banks,3130B9F88,U.S. Government Agency Debt (if categorized as coupon-paying notes),8599940.06,0.0129,0.0405,2026-10-01,2028-02-17,2028-02-17,1,505,505,N,N,N,,8600000.00
+75,Federal Home Loan Banks,313385P83,U.S. Government Agency Debt (if categorized as no-coupon discount notes),9946644.40,0.0149,0.0364,2026-11-18,2026-11-18,2026-11-18,49,49,49,N,Y,N,,10000000.00
+76,U.S. Treasury Bills,912797VY0,U.S. Treasury Debt,4970150.00,0.0074,0.0401,2026-11-24,2026-11-24,2026-11-24,55,55,55,Y,Y,N,,5000000.00
+77,Federal Home Loan Banks,3130BCHE6,U.S. Government Agency Debt (if categorized as no-coupon discount notes),7000000.00,0.0105,0.0000,2026-10-01,2027-07-06,2027-07-06,1,279,279,N,N,N,,7000000.00
+78,Federal Farm Credit Banks Funding Corp.,3133ETB48,U.S. Government Agency Debt (if categorized as coupon-paying notes),950529.74,0.0014,0.0404,2026-10-01,2027-10-01,2027-10-01,1,366,366,N,N,N,,950000.00
+79,U.S. Treasury Bills,912797WS2,U.S. Treasury Debt,9864031.50,0.0148,0.0397,2027-02-02,2027-02-02,2027-02-02,125,125,125,Y,Y,N,,10000000.00
+80,U.S. Treasury Bills,912797VM6,U.S. Treasury Debt,5488878.29,0.0082,0.0380,2026-10-20,2026-10-20,2026-10-20,20,20,20,Y,Y,N,,5500000.00
+81,Credit Agricole Corporate and Investment Bank SA,ZS2244A,"U.S. Government Agency Repurchase Agreement, collateralized only by U.S. Government Agency securities, U.S. Treasuries, and cash",50000000.00,0.0749,0.0389,2026-10-01,2026-10-01,2026-10-01,1,1,1,Y,Y,N,51000001.17,50000000.00
+82,U.S. Treasury Bills,912797VL8,U.S. Treasury Debt,4993655.35,0.0075,0.0373,2026-10-13,2026-10-13,2026-10-13,13,13,13,Y,Y,N,,5000000.00
+83,Federal Home Loan Banks,3130BAY92,U.S. Government Agency Debt (if categorized as coupon-paying notes),6599741.15,0.0099,0.0400,2026-10-01,2027-09-07,2027-09-07,1,342,342,N,N,N,,6600000.00
+84,Cash,CASH,Cash,28441399.12,,,2026-09-30,2026-09-30,2026-09-30,0,0,0,Y,Y,N,,28441399.12
+85,Other assets (receivables),OTHER-ASSETS,Other assets (receivables),1129918.11,,,2026-09-30,2026-09-30,2026-09-30,0,0,0,N,N,N,,1129918.11

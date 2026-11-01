@@ -468,6 +468,51 @@ All configurations and the model assumptions are in
 (as in `npm test` and CI), the replay runs for 70 days as a smoke test.
 
 
+## Real position-level snapshot (v2.1)
+
+```bash
+npm run prepare:franklin          # N-MFP3 XML -> data/input/franklin-fobxx/holdings.csv, fund.json
+npm run build:franklin            # positions.csv, tree.json, snapshot.json (Merkle root)
+npm run experiment:real-positions # on-chain verification, policy and challenges
+```
+
+The reserve tree is built from a real filing: the Franklin OnChain U.S.
+Government Money Fund (FOBXX, the fund behind the BENJI token) Form N-MFP3
+for 30 September 2026, committed in `data/raw/franklin/` (SEC EDGAR, public
+record). It has 85 positions: 83 securities (Treasury bills and notes, agency
+debt, 4 tri-party repos with 38 collateral lines), cash, and other assets.
+Values, maturities and the daily/weekly liquidity flags are the fund's own;
+the haircut schedule (0/10/25/50 bps by days to final maturity) is a stated
+policy assumption. The 83 CUSIP/value pairs match the fund's published
+holdings PDF to the dollar.
+
+| | Result |
+|---|---:|
+| Merkle root | `0x8f8a056a...56595c1` |
+| Positions verified on-chain | 85 of 85 (proof length 6-7) |
+| Gross / eligible reserves (USD m) | 697.84 / 695.75 |
+| Liquid within 7 days (USD m) | 486.96 (fund-reported WLA 487.47) |
+| Token liabilities + other liabilities (USD m) | 667.97 + 30.03 |
+| BCR after haircuts | 99.68% |
+| RLC against the largest 5-day redemptions in Sep 2026 (USD 24.27 m) | 2,006.51% |
+| Mint of USD 1 m, minBCR 100% | rejected (with or without receipt) |
+| Mint of USD 1 m, minBCR 99.5% | accepted; headroom without new cash USD 1.25 m |
+| `submitSnapshot` gas | 391,392 |
+
+A 1:1 government money fund has no over-collateralisation and carries its
+securities at amortised cost, so at market value with haircuts its BCR is just
+below 100%. The policy threshold must follow the product: a ≥100% BCR fits an
+over-collateralised note such as USDY; a fund share needs a threshold such as
+99.5% (the half-cent band of Rule 2a-7) and receipt-backed minting.
+
+Five tampered versions of real positions are each caught by a permissionless
+challenge that suspends minting (`data/results/real-position-challenges.csv`,
+66,000-67,556 gas): a repo pledged elsewhere but counted, receivables counted
+as eligible, an unsettled bill counted, a haircut skipped, and liquid value
+above eligible value. A non-weekly-liquid note reported as liquid is *not*
+caught, because the contract does not check liquidity against maturity; this
+is listed as a limitation.
+
 ## View result files in PowerShell
 
 Display the policy decisions:
@@ -494,9 +539,10 @@ Import-Csv data\results\gas-results.csv |
 
 ## Tests covered
 
-46 tests pass (`npm test`), including 14 v2 regression tests in
+50 tests pass (`npm test`), including 14 v2 regression tests in
 `test/V2ReviewFixes.ts` (settlement BCR, role scoping, Merkle challenge,
-subscription receipts). The controller unit tests verify:
+subscription receipts) and 3 tests on the real FOBXX position snapshot in
+`test/RealPositionSnapshot.ts`. The controller unit tests verify:
 
 - acceptance of a complete and fresh snapshot;
 - rejection of a missing mandatory signature;
@@ -506,8 +552,8 @@ subscription receipts). The controller unit tests verify:
 - pending liability until settlement; and
 - mint suspension after snapshot staleness.
 
-The evaluation contains three deterministic scenarios and the real-data
-replay. It is not a formal security evaluation.
+The evaluation contains three deterministic scenarios, the real-data
+replay, and the real position-level snapshot. It is not a formal security evaluation.
 
 ## Reproducibility guarantees
 
@@ -559,6 +605,10 @@ third-party CSV is not stored in the repository.
   off-chain statements.
 - The position-level reserve portfolio is synthetic in the scenarios and
   modelled (cash + Treasury-bill ladder priced from real rates) in the replay.
+  The real FOBXX snapshot is a single month-end filing; it is not a time
+  series, and its haircuts are a policy assumption.
+- The challenge rules do not check liquidity against maturity, so a
+  long-dated position reported as liquid is not caught on-chain.
 - Institutional signers are simulated test accounts.
 - The experiment does not reconstruct or audit USDY's actual holdings,
   encumbrances, custody accounts, or settlement records.

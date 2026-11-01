@@ -37,6 +37,9 @@ private_key.txt
 data/raw/*
 !data/raw/README.md
 !data/raw/treasury/
+# SEC EDGAR filings are public records; the fund's holdings PDF is not committed.
+!data/raw/franklin/
+data/raw/franklin/*.pdf
 !data/raw/.gitkeep
 
 # Logs and temporary files

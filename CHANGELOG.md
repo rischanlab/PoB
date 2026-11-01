@@ -4,7 +4,39 @@ All notable changes to the RWA-PoB prototype. The paper version for IET
 Blockchain (`rwa_pob_iet.tex`) mirrors this release: every number in the
 paper comes from the CSV files listed below.
 
-## [2.0.0] - 2026-11-01 - Response to review
+## [2.1.0] - 2026-11-01 - Real reserve positions
+
+### Added
+
+- Real position-level reserve snapshot from the Franklin OnChain U.S.
+  Government Money Fund (FOBXX) Form N-MFP3 for 30 September 2026:
+  `data/raw/franklin/fobxx-nmfp3-2026-09-30.xml` (SEC EDGAR, public record),
+  `scripts/prepare-franklin-nmfp3.py`, `scripts/build-franklin-snapshot.mjs`,
+  `data/input/franklin-fobxx/`, `test/RealPositionSnapshot.ts` (3 tests), and
+  npm scripts `prepare:franklin`, `build:franklin`,
+  `experiment:real-positions`.
+- 85 real positions (83 securities, cash, other assets); the 83 CUSIP/value
+  pairs match the fund's holdings PDF. Liquid value uses the fund's own
+  weekly-liquid-asset flag; haircuts (0/10/25/50 bps by days to final
+  maturity) are a stated policy assumption.
+
+### Results
+
+- All 85 positions verify on-chain against the committed root
+  `0x8f8a056afb9827fa9711b33b5df17010fe9aec9c7a53e7a13fd6c882d56595c1`
+  (proof length 6-7). `submitSnapshot` with the real aggregates: 391,392 gas.
+- Eligible reserves USD 695.75 m against USD 697.99 m of liabilities: BCR
+  99.68%. Liquid within 7 days USD 486.96 m (fund-reported weekly liquid
+  assets USD 487.47 m). RLC against the largest five-business-day gross
+  redemptions in September 2026 (USD 24.27 m): 2,006.51%.
+- With minBCR 100% the controller rejects every mint, with or without a
+  receipt. With minBCR 99.5% it accepts a USD 1 m mint, and the headroom
+  without new cash is USD 1.25 m. The threshold has to follow the product.
+- Five tampered real positions are caught by a challenge that suspends
+  minting (66,000-67,556 gas). A long-dated note reported as liquid is not
+  caught: the challenge rules do not compare liquidity with maturity.
+
+
 
 This release fixes the defects found in review, replaces the synthetic-only
 evaluation with an on-chain replay driven by real data, and keeps the

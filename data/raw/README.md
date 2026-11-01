@@ -16,6 +16,16 @@ The committed series comes from the export downloaded on 2026-11-01 (sum of
 
 The processed observations are written to `data/input/`.
 
+## Franklin OnChain U.S. Government Money Fund, Form N-MFP3 (committed)
+
+`data/raw/franklin/fobxx-nmfp3-2026-09-30.xml` is the `primary_doc.xml` of the
+fund's Form N-MFP3 for 30 September 2026 (registrant Franklin Templeton Trust,
+CIK 0001786958, series S000067043), from SEC EDGAR. SEC filings are public
+records. The fund's holdings PDF from franklintempleton.com was used only to
+cross-check identifiers and values (83/83 match) and is not committed; pass
+its `pdftotext -layout` output as a second argument to
+`scripts/prepare-franklin-nmfp3.py` to repeat the check.
+
 ## U.S. Treasury Daily Treasury Bill Rates (committed)
 
 `data/raw/treasury/` holds the U.S. Department of the Treasury *Daily Treasury
