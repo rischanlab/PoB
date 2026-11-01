@@ -17,8 +17,12 @@ jobs:
       - run: npm run build
       - run: npm run generate:data
       - run: npm run validate:treasury
+      - run: npm run reconcile:franklin
+      - run: npm run reconcile:franklin-monthly
       - run: npm test
       - run: npm run experiment
+      - run: npm run experiment:trust
+      - run: npm run experiment:fobxx-flows
       - uses: actions/upload-artifact@v4
         with:
           name: experiment-results

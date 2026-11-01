@@ -6,6 +6,13 @@ pragma solidity ^0.8.28;
 interface IPoBPolicyController {
     function authorizeMint(uint256 mintLiability) external;
 
+    function authorizeMintWithReceipt(
+        uint256 mintLiability,
+        uint256 receivedCash,
+        uint256 nonce,
+        bytes calldata custodianSignature
+    ) external;
+
     function requestRedemption(address beneficiary, uint256 redemptionValue)
         external
         returns (uint256 redemptionId, uint8 disposition);

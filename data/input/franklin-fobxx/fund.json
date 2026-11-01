@@ -132,6 +132,220 @@
       "redemptions": "2612.52"
     }
   ],
+  "dailyLiquidAssets": [
+    {
+      "date": "2026-09-01",
+      "dailyLiquidAssets": "441903330.83",
+      "weeklyLiquidAssets": "486122019.49",
+      "percentageWeeklyLiquidAssets": "0.6918"
+    },
+    {
+      "date": "2026-09-02",
+      "dailyLiquidAssets": "443909425.67",
+      "weeklyLiquidAssets": "488132638.05",
+      "percentageWeeklyLiquidAssets": "0.6927"
+    },
+    {
+      "date": "2026-09-03",
+      "dailyLiquidAssets": "448781055.10",
+      "weeklyLiquidAssets": "488008791.18",
+      "percentageWeeklyLiquidAssets": "0.6926"
+    },
+    {
+      "date": "2026-09-04",
+      "dailyLiquidAssets": "438494207.05",
+      "weeklyLiquidAssets": "482712087.25",
+      "percentageWeeklyLiquidAssets": "0.6902"
+    },
+    {
+      "date": "2026-09-08",
+      "dailyLiquidAssets": "435182489.19",
+      "weeklyLiquidAssets": "479418485.90",
+      "percentageWeeklyLiquidAssets": "0.6888"
+    },
+    {
+      "date": "2026-09-09",
+      "dailyLiquidAssets": "435258077.91",
+      "weeklyLiquidAssets": "481748626.89",
+      "percentageWeeklyLiquidAssets": "0.6920"
+    },
+    {
+      "date": "2026-09-10",
+      "dailyLiquidAssets": "439681791.16",
+      "weeklyLiquidAssets": "476763865.40",
+      "percentageWeeklyLiquidAssets": "0.6827"
+    },
+    {
+      "date": "2026-09-11",
+      "dailyLiquidAssets": "439928503.80",
+      "weeklyLiquidAssets": "477014146.33",
+      "percentageWeeklyLiquidAssets": "0.6828"
+    },
+    {
+      "date": "2026-09-14",
+      "dailyLiquidAssets": "443497157.58",
+      "weeklyLiquidAssets": "470594521.62",
+      "percentageWeeklyLiquidAssets": "0.6798"
+    },
+    {
+      "date": "2026-09-15",
+      "dailyLiquidAssets": "441893146.30",
+      "weeklyLiquidAssets": "466743061.96",
+      "percentageWeeklyLiquidAssets": "0.6781"
+    },
+    {
+      "date": "2026-09-16",
+      "dailyLiquidAssets": "442035306.48",
+      "weeklyLiquidAssets": "466887777.61",
+      "percentageWeeklyLiquidAssets": "0.6782"
+    },
+    {
+      "date": "2026-09-17",
+      "dailyLiquidAssets": "443384709.34",
+      "weeklyLiquidAssets": "473986271.57",
+      "percentageWeeklyLiquidAssets": "0.6898"
+    },
+    {
+      "date": "2026-09-18",
+      "dailyLiquidAssets": "437557056.74",
+      "weeklyLiquidAssets": "468161772.16",
+      "percentageWeeklyLiquidAssets": "0.6871"
+    },
+    {
+      "date": "2026-09-21",
+      "dailyLiquidAssets": "433907643.19",
+      "weeklyLiquidAssets": "474464438.20",
+      "percentageWeeklyLiquidAssets": "0.7000"
+    },
+    {
+      "date": "2026-09-22",
+      "dailyLiquidAssets": "427001296.00",
+      "weeklyLiquidAssets": "467562250.88",
+      "percentageWeeklyLiquidAssets": "0.6969"
+    },
+    {
+      "date": "2026-09-23",
+      "dailyLiquidAssets": "430108967.91",
+      "weeklyLiquidAssets": "470674082.64",
+      "percentageWeeklyLiquidAssets": "0.6983"
+    },
+    {
+      "date": "2026-09-24",
+      "dailyLiquidAssets": "429179266.37",
+      "weeklyLiquidAssets": "469748540.97",
+      "percentageWeeklyLiquidAssets": "0.6978"
+    },
+    {
+      "date": "2026-09-25",
+      "dailyLiquidAssets": "423032415.44",
+      "weeklyLiquidAssets": "470806870.83",
+      "percentageWeeklyLiquidAssets": "0.6983"
+    },
+    {
+      "date": "2026-09-28",
+      "dailyLiquidAssets": "431216816.13",
+      "weeklyLiquidAssets": "474007622.19",
+      "percentageWeeklyLiquidAssets": "0.6997"
+    },
+    {
+      "date": "2026-09-29",
+      "dailyLiquidAssets": "435799067.51",
+      "weeklyLiquidAssets": "473299119.30",
+      "percentageWeeklyLiquidAssets": "0.6993"
+    },
+    {
+      "date": "2026-09-30",
+      "dailyLiquidAssets": "449961191.62",
+      "weeklyLiquidAssets": "487465130.24",
+      "percentageWeeklyLiquidAssets": "0.6984"
+    }
+  ],
+  "dailyNavPerShare": [
+    {
+      "date": "2026-09-01",
+      "nav": "1.0000"
+    },
+    {
+      "date": "2026-09-02",
+      "nav": "1.0000"
+    },
+    {
+      "date": "2026-09-03",
+      "nav": "1.0000"
+    },
+    {
+      "date": "2026-09-04",
+      "nav": "1.0000"
+    },
+    {
+      "date": "2026-09-08",
+      "nav": "1.0000"
+    },
+    {
+      "date": "2026-09-09",
+      "nav": "1.0000"
+    },
+    {
+      "date": "2026-09-10",
+      "nav": "1.0000"
+    },
+    {
+      "date": "2026-09-11",
+      "nav": "1.0000"
+    },
+    {
+      "date": "2026-09-14",
+      "nav": "1.0000"
+    },
+    {
+      "date": "2026-09-15",
+      "nav": "1.0000"
+    },
+    {
+      "date": "2026-09-16",
+      "nav": "1.0000"
+    },
+    {
+      "date": "2026-09-17",
+      "nav": "1.0000"
+    },
+    {
+      "date": "2026-09-18",
+      "nav": "1.0000"
+    },
+    {
+      "date": "2026-09-21",
+      "nav": "1.0000"
+    },
+    {
+      "date": "2026-09-22",
+      "nav": "1.0000"
+    },
+    {
+      "date": "2026-09-23",
+      "nav": "1.0000"
+    },
+    {
+      "date": "2026-09-24",
+      "nav": "1.0000"
+    },
+    {
+      "date": "2026-09-25",
+      "nav": "1.0000"
+    },
+    {
+      "date": "2026-09-28",
+      "nav": "1.0000"
+    },
+    {
+      "date": "2026-09-29",
+      "nav": "1.0000"
+    },
+    {
+      "date": "2026-09-30",
+      "nav": "1.0000"
+    }
+  ],
   "derived": {
     "sumSecurityValues": "668273639.72",
     "sumDailyLiquidSecurities": "421410671.11",

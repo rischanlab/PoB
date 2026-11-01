@@ -1,6 +1,6 @@
 {
   "name": "rwa-pob-usdy-prototype",
-  "version": "0.1.0",
+  "version": "2.2.0",
   "private": true,
   "type": "module",
   "description": "Research prototype for a credential-based proof-of-backing policy layer calibrated to USDY-like Treasury tokens.",
@@ -19,7 +19,16 @@
     "fetch:treasury": "bash scripts/fetch-treasury-bill-rates.sh",
     "prepare:franklin": "python3 scripts/prepare-franklin-nmfp3.py data/raw/franklin/fobxx-nmfp3-2026-09-30.xml",
     "build:franklin": "node scripts/build-franklin-snapshot.mjs",
-    "experiment:real-positions": "hardhat test test/RealPositionSnapshot.ts"
+    "experiment:real-positions": "hardhat test test/RealPositionSnapshot.ts",
+    "reconcile:franklin": "node scripts/reconcile-snapshot.mjs",
+    "experiment:fobxx-flows": "hardhat test test/FobxxDailyFlows.ts",
+    "experiment:trust": "hardhat test test/TrustModel.ts",
+    "test:persistent": "hardhat test test/PersistentController.ts",
+    "prepare:usdy-supply": "node scripts/prepare-usdy-supply.mjs",
+    "test:price": "hardhat test test/VariablePrice.ts",
+    "experiment:fobxx-monthly": "hardhat test test/FobxxMonthly.ts",
+    "build:franklin-monthly": "for d in 2026-05-31 2026-06-30 2026-07-31 2026-08-31; do python3 scripts/prepare-franklin-nmfp3.py data/raw/franklin/fobxx-nmfp3-$d.xml - data/input/franklin-fobxx-monthly/$d && node scripts/build-franklin-snapshot.mjs data/input/franklin-fobxx-monthly/$d; done",
+    "reconcile:franklin-monthly": "for d in data/input/franklin-fobxx-monthly/*/; do node scripts/reconcile-snapshot.mjs $d/tree.json $d/snapshot.json $d/fund.json || exit 1; done"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox-viem": "5.0.7",

@@ -17,6 +17,8 @@ import { StandardMerkleTree } from "@openzeppelin/merkle-tree";
 import { keccak256, toBytes, type Hex } from "viem";
 
 import { POLICY_HASH, WAD, makeSnapshot, signSnapshot, usd } from "./helpers.js";
+// @ts-ignore - plain ES module shared with the CLI
+import { reconcile, externalFromFund } from "../scripts/reconcile-snapshot.mjs";
 
 const { viem } = await hre.network.create();
 
@@ -102,7 +104,10 @@ describe("Real position-level snapshot (FOBXX N-MFP3, 30 Sep 2026)", function ()
   });
 
   it("evaluates the mint policy on the real balance sheet", async function () {
-    for (const [label, minBcr] of [["100%", WAD], ["99.5%", (995n * WAD) / 1000n]] as const) {
+    // 99.5% and the sweep values are researcher-selected sensitivity
+    // thresholds, not a regulatory minimum.
+    const sweep: Array<[string, bigint]> = [["100%", WAD], ["99.5%", (995n * WAD) / 1000n], ["99.7%", (997n * WAD) / 1000n], ["99.6%", (996n * WAD) / 1000n], ["99.0%", (990n * WAD) / 1000n]];
+    for (const [label, minBcr] of sweep) {
       const env = await deploy(minBcr);
       await submit(env, tree.root as Hex);
       const bcr = await env.controller.read.currentBCR();
@@ -119,6 +124,10 @@ describe("Real position-level snapshot (FOBXX N-MFP3, 30 Sep 2026)", function ()
         mint1mWithoutReceipt: String(await env.controller.read.canMint([oneMillion])),
         mint1mWithReceipt: String(await env.controller.read.canMintWithReceipt([oneMillion, oneMillion])),
         mintHeadroomUsd: usdText(headroom),
+        // With a receipt, BCR after mint = (E + m) / (L + m): it moves toward
+        // 100% but cannot reach it while E < L, so a strict 100% rule cannot be
+        // cured by new subscriptions alone.
+        bcrAfter100mReceiptMint: pct(((eligible + usd("100000000")) * WAD) / (liabilities + usd("100000000"))),
       };
       if (headroom > 0n) {
         assert.equal(await env.controller.read.canMint([headroom]), true);
@@ -129,8 +138,89 @@ describe("Real position-level snapshot (FOBXX N-MFP3, 30 Sep 2026)", function ()
       rows.push(row);
     }
     out.policy = rows.slice();
+    const r100 = rows[0];
+    assert.equal(r100.mint1mWithReceipt, "false");
+    assert.ok(Number(r100.bcrAfter100mReceiptMint) < 100);
     assert.equal(rows[0].mint1mWithoutReceipt, "false"); // a 1:1 fund sits below 100% BCR at market value
     assert.equal(rows[1].mint1mWithoutReceipt, "true");
+  });
+
+  it("aggregate reconciliation: what the contract checks and what it does not", async function () {
+    const fund = JSON.parse(await readFile(`${DIR}/fund.json`, "utf8"));
+    const external = externalFromFund(fund);
+    const recon: Record<string, string>[] = [];
+    const run = async (name: string, ls: Leaf[], aggregates: any, expectOnchain: boolean) => {
+      const t = StandardMerkleTree.of(ls, TYPES);
+      const env = await deploy((995n * WAD) / 1000n);
+      const pending = BigInt(A.stressPendingRedemptions);
+      const snap = makeSnapshot(env.now, {
+        reserveRoot: t.root as Hex,
+        grossReserves: BigInt(aggregates.grossReserves), eligibleReserves: BigInt(aggregates.eligibleReserves),
+        liquidAssets: BigInt(aggregates.liquidAssets), tokenLiabilities: BigInt(A.tokenLiabilities) - pending,
+        pendingRedemptions: pending, otherLiabilities: BigInt(A.otherLiabilities),
+      });
+      await env.controller.write.submitSnapshot([snap, await signSnapshot(env.signers, env.chainId, env.controller.address, snap)], { account: env.admin.account });
+      // Every committed leaf is individually consistent, so no challenge can succeed.
+      let challengeable = 0;
+      for (const [, l] of t.entries()) if (Number(await env.controller.read.positionInconsistency([toStruct(l)]))) challengeable++;
+      const r = reconcile(ls, aggregates, external);
+      const leafCheck = r.findings.filter((f: any) => f.check === "leaves-vs-signed");
+      const extCheck = r.findings.filter((f: any) => f.check === "leaves-vs-external");
+      assert.equal(await env.controller.read.isSnapshotFresh(), expectOnchain);
+      recon.push({
+        case: name,
+        acceptedOnChain: String(await env.controller.read.isSnapshotFresh()),
+        challengeableLeaves: String(challengeable),
+        leafVsSignedMismatch: leafCheck.length ? leafCheck.map((f: any) => `${f.field} ${usdText(f.difference)}`).join("; ") : "none",
+        leafVsFilingMismatch: extCheck.length ? extCheck.map((f: any) => f.field === "positionCount" ? `count ${f.fromLeaves} vs ${f.external}` : `${f.field} ${usdText(f.difference < 0n ? -f.difference : f.difference)}`).join("; ") : "none",
+        bcrSigned: pct(await env.controller.read.currentBCR()),
+        bcrFromLeaves: pct((r.totals.eligibleReserves * WAD) / (BigInt(A.tokenLiabilities) + BigInt(A.otherLiabilities))),
+      });
+      return r;
+    };
+    const plus = (a: any, k: string, d: bigint) => ({ ...a, [k]: (BigInt(a[k]) + d).toString() });
+    // R0 honest file.
+    const r0 = await run("R0 honest position file", leaves, A, true);
+    assert.equal(r0.findings.length, 0);
+    // R1 signed eligible and liquid aggregates inflated by USD 20 m; leaves untouched.
+    const inflatedAgg = plus(plus(plus(A, "eligibleReserves", usd("20000000")), "grossReserves", usd("20000000")), "liquidAssets", usd("20000000"));
+    const r1 = await run("R1 aggregates inflated by USD 20m", leaves, inflatedAgg, true);
+    assert.ok(r1.findings.some((f: any) => f.check === "leaves-vs-signed"));
+    // R2 largest position omitted from the file, aggregates unchanged.
+    const big = leaves.reduce((b, l, i) => (BigInt(l[3]) > BigInt(leaves[b][3]) ? i : b), 0);
+    const omitted = leaves.filter((_, i) => i !== big);
+    const r2 = await run("R2 position omitted, aggregates unchanged", omitted, A, true);
+    assert.ok(r2.findings.some((f: any) => f.check === "leaves-vs-signed"));
+    // R3 position omitted and aggregates reduced to match (consistent file).
+    const cut = (a: any) => ({ ...a,
+      grossReserves: (BigInt(a.grossReserves) - BigInt(leaves[big][3])).toString(),
+      eligibleReserves: (BigInt(a.eligibleReserves) - BigInt(leaves[big][4])).toString(),
+      liquidAssets: (BigInt(a.liquidAssets) - BigInt(leaves[big][5])).toString() });
+    const r3 = await run("R3 position omitted, aggregates consistent", omitted, cut(A), true);
+    assert.ok(!r3.findings.some((f: any) => f.check === "leaves-vs-signed"));
+    assert.ok(r3.findings.some((f: any) => f.check === "leaves-vs-external"));
+    // R4 fabricated consistent position added, aggregates raised to match.
+    const fake: Leaf = ["FOBXX-2026-09-30-999", "912797ZZ9", usd("20000000").toString(), usd("20000000").toString(), usd("20000000").toString(), usd("20000000").toString(), "5", "0", false, true, true];
+    const r4 = await run("R4 fabricated position, aggregates consistent", [...leaves, fake], plus(plus(plus(A, "eligibleReserves", usd("20000000")), "grossReserves", usd("20000000")), "liquidAssets", usd("20000000")), true);
+    assert.ok(!r4.findings.some((f: any) => f.check === "leaves-vs-signed"));
+    assert.ok(r4.findings.some((f: any) => f.check === "leaves-vs-external"));
+    out.reconciliation = recon;
+  });
+
+  it("reviewer example: signed 100 eligible vs leaves summing to 80, liabilities 90", async function () {
+    const env = await deploy(WAD);
+    const mk = (id: string, v: string): Leaf => [id, `SYN-${id}`, usd(v).toString(), usd(v).toString(), usd(v).toString(), "0", "30", "0", false, true, true];
+    const ls = [mk("P1", "40"), mk("P2", "40")];
+    const t = StandardMerkleTree.of(ls, TYPES);
+    const snap = makeSnapshot(env.now, { reserveRoot: t.root as Hex, grossReserves: usd("100"), eligibleReserves: usd("100"), liquidAssets: usd("10"), tokenLiabilities: usd("90"), pendingRedemptions: 0n, otherLiabilities: 0n });
+    await env.controller.write.submitSnapshot([snap, await signSnapshot(env.signers, env.chainId, env.controller.address, snap)], { account: env.admin.account });
+    assert.equal(pct(await env.controller.read.currentBCR()), "111.11");
+    const r = reconcile(ls, { grossReserves: usd("100"), eligibleReserves: usd("100"), liquidAssets: usd("10") });
+    assert.equal(pct((r.totals.eligibleReserves * WAD) / usd("90")), "88.89");
+    for (const [i, l] of t.entries()) {
+      await assert.rejects(env.controller.write.challengeReservePosition([toStruct(l), t.getProof(i)], { account: env.outsider.account }), /PositionIsConsistent/);
+    }
+    out.reviewerExample = { signedBcr: "111.11", leafBcr: "88.89", acceptedOnChain: true, challengeSucceeds: false, offchainReconciliationFlags: r.findings.length > 0 };
   });
 
   it("challenges against tampered real positions suspend minting", async function () {
@@ -188,6 +278,7 @@ describe("Real position-level snapshot (FOBXX N-MFP3, 30 Sep 2026)", function ()
     const csv = (rs: Record<string, string>[]) => [Object.keys(rs[0]).join(","), ...rs.map((r) => Object.values(r).map((v) => (/[",]/.test(v) ? `"${v}"` : v)).join(","))].join("\n") + "\n";
     await writeFile("data/results/real-position-policy.csv", csv(out.policy));
     await writeFile("data/results/real-position-challenges.csv", csv(challenges));
+    await writeFile("data/results/real-position-reconciliation.csv", csv(out.reconciliation));
     await writeFile("data/results/real-position-snapshot.json", JSON.stringify({ ...out, usd: snapshotData.usd, ratiosPercent: snapshotData.ratiosPercent, haircutSchedule: snapshotData.haircutSchedule }, null, 2) + "\n");
   });
 });

@@ -6,7 +6,8 @@ Output: data/input/franklin-fobxx/holdings.csv  (one row per portfolio security,
         totals as reported in the filing).
 Optionally cross-checks CUSIP/value pairs against the fund's published holdings
 PDF after `pdftotext -layout` (pass the .txt as the second argument).
-Usage: python3 scripts/prepare-franklin-nmfp3.py FILING.xml [HOLDINGS.txt]
+Usage: python3 scripts/prepare-franklin-nmfp3.py FILING.xml [HOLDINGS.txt|-] [OUTDIR]
+(default OUTDIR data/input/franklin-fobxx; "-" skips the PDF cross-check)
 """
 import csv, json, re, sys
 import xml.etree.ElementTree as ET
@@ -15,7 +16,7 @@ from decimal import Decimal
 from pathlib import Path
 
 NS = "{http://www.sec.gov/edgar/nmfp3}"
-OUT = Path("data/input/franklin-fobxx")
+OUT = Path(sys.argv[3]) if len(sys.argv) > 3 else Path("data/input/franklin-fobxx")
 
 def text(node, tag):
     el = node.find(NS + tag)
@@ -85,9 +86,11 @@ for f_ in cls.iter(NS + "dialyShareholderFlowReported"):
                   "redemptions": text(f_, "dailyGrossRedemptions")})
 reds = [Decimal(x["redemptions"]) for x in flows]
 max5 = max(sum(reds[i:i + 5]) for i in range(len(reds) - 4))
-# The filing lists liquid assets for each business day; use the report date.
-liq = [d for d in series.iter(NS + "liquidAssetsDetails")
-       if text(d, "totalLiquidAssetsNearPercentDate") == report_date.isoformat()][0]
+# The filing lists liquid assets for each business day; use the report date,
+# or the last business day before it when the report date is a weekend.
+liq = max((d for d in series.iter(NS + "liquidAssetsDetails")
+           if text(d, "totalLiquidAssetsNearPercentDate") <= report_date.isoformat()),
+          key=lambda d: text(d, "totalLiquidAssetsNearPercentDate"))
 fund = {
     "source": "SEC EDGAR Form N-MFP3, primary_doc.xml",
     "registrant": text(gen, "registrantFullName"),
@@ -116,6 +119,16 @@ fund = {
     "maxDailyGrossRedemptions": f"{max(reds):.2f}",
     "max5BusinessDayGrossRedemptions": f"{max5:.2f}",
     "dailyFlows": flows,
+    "dailyLiquidAssets": [
+        {"date": text(d, "totalLiquidAssetsNearPercentDate"),
+         "dailyLiquidAssets": text(d, "totalValueDailyLiquidAssets"),
+         "weeklyLiquidAssets": text(d, "totalValueWeeklyLiquidAssets"),
+         "percentageWeeklyLiquidAssets": text(d, "percentageWeeklyLiquidAssets")}
+        for d in series.iter(NS + "liquidAssetsDetails")],
+    "dailyNavPerShare": [
+        {"date": text(d, "dailyNetAssetValuePerShareDateClass"),
+         "nav": (d.find(NS + "dailyNetAssetValuePerShareClass").text or "").strip()}
+        for d in cls.iter(NS + "dailyNetAssetValuePerShareClass") if d.find(NS + "dailyNetAssetValuePerShareClass") is not None],
     "derived": {
         "sumSecurityValues": f"{sec_total:.2f}",
         "sumDailyLiquidSecurities": f"{dla:.2f}",
@@ -128,7 +141,7 @@ print(f"daily-liquid securities={dla} (+cash {Decimal(dla)+Decimal(cash)}) repor
 print(f"weekly-liquid securities={wla} (+cash {Decimal(wla)+Decimal(cash)}) reported WLA={fund['totalValueWeeklyLiquidAssets']}")
 print(f"max daily redemptions={max(reds)} max 5-day={max5}")
 
-if len(sys.argv) > 2:
+if len(sys.argv) > 2 and sys.argv[2] != "-":
     pdf = Path(sys.argv[2]).read_text()
     found = mismatched = 0
     for r in securities:

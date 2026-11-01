@@ -16,6 +16,15 @@ The committed series comes from the export downloaded on 2026-11-01 (sum of
 
 The processed observations are written to `data/input/`.
 
+The USDY daily NAV ("Net Asset Value (Dollar)", RWA.xyz export downloaded on
+2026-11-01, 1,140 days from 18 Sep 2023 to 31 Oct 2026) is not
+redistributed either. Save it as
+`data/raw/rwa-xyz-usdy-net-asset-value-2026-11-01.csv` and run
+`npm run prepare:usdy-supply`. The script divides the token value by the NAV
+of the same day (RWA.xyz computes the value as bridged supply x the same
+NAV) and writes `data/input/usdy-observed-supply.csv` with the token value,
+NAV and implied bridged supply for each of the 1,043 days.
+
 ## Franklin OnChain U.S. Government Money Fund, Form N-MFP3 (committed)
 
 `data/raw/franklin/fobxx-nmfp3-2026-09-30.xml` is the `primary_doc.xml` of the
@@ -25,6 +34,21 @@ records. The fund's holdings PDF from franklintempleton.com was used only to
 cross-check identifiers and values (83/83 match) and is not committed; pass
 its `pdftotext -layout` output as a second argument to
 `scripts/prepare-franklin-nmfp3.py` to repeat the check.
+
+The four preceding monthly filings are committed as well, for the time series
+of `test/FobxxMonthly.ts`:
+
+| File | Report date | EDGAR accession |
+|---|---|---|
+| `fobxx-nmfp3-2026-05-31.xml` | 31 May 2026 | 0002071691-26-013228 |
+| `fobxx-nmfp3-2026-06-30.xml` | 30 Jun 2026 | 0002071691-26-015662 |
+| `fobxx-nmfp3-2026-07-31.xml` | 31 Jul 2026 | 0002071691-26-017542 |
+| `fobxx-nmfp3-2026-08-31.xml` | 31 Aug 2026 | 0002071691-26-021281 |
+| `fobxx-nmfp3-2026-09-30.xml` | 30 Sep 2026 | 0002071691-26-023634 |
+
+`npm run build:franklin-monthly` writes `data/input/franklin-fobxx-monthly/`.
+No holdings PDF was used for these months, so face value is set to the filed
+value.
 
 ## U.S. Treasury Daily Treasury Bill Rates (committed)
 
