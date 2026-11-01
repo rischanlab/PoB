@@ -19,6 +19,7 @@ paper comes from the CSV files listed below.
   pairs match the fund's holdings PDF. Liquid value uses the fund's own
   weekly-liquid-asset flag; haircuts (0/10/25/50 bps by days to final
   maturity) are a stated policy assumption.
+- 49 tests in total (46 + 3).
 
 ### Results
 

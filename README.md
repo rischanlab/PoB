@@ -539,7 +539,7 @@ Import-Csv data\results\gas-results.csv |
 
 ## Tests covered
 
-50 tests pass (`npm test`), including 14 v2 regression tests in
+49 tests pass (`npm test`; Hardhat also lists `test/helpers.ts` as a passing file, so it prints 50), including 14 v2 regression tests in
 `test/V2ReviewFixes.ts` (settlement BCR, role scoping, Merkle challenge,
 subscription receipts) and 3 tests on the real FOBXX position snapshot in
 `test/RealPositionSnapshot.ts`. The controller unit tests verify:
