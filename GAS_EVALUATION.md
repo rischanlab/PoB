@@ -1,5 +1,8 @@
 # Phase F: Atomic Controller-Token Gas Evaluation
 
+> Updated for v2.0.0 (role-scoped snapshot verification and settlement
+> propagation add gas to the controller paths). See `CHANGELOG.md`.
+
 ## The big why
 
 Atomic enforcement adds work to token issuance: the transaction evaluates the
@@ -70,36 +73,36 @@ value:
 
 | Operation | Samples | Minimum | Median | Maximum |
 |---|---:|---:|---:|---:|
-| Snapshot submission | 10 | 362,109 | 362,109 | 362,109 |
+| Snapshot submission | 10 | 370,517 | 370,517 | 370,517 |
 | Aggregate PoR report | 10 | 94,653 | 94,653 | 94,653 |
-| Advisory authorization | 10 | 82,172 | 82,172 | 82,172 |
+| Advisory authorization | 10 | 86,660 | 86,660 | 86,660 |
 | Independent token mint | 10 | 70,834 | 70,834 | 70,834 |
-| Atomic issuance | 10 | 132,573 | 132,573 | 132,573 |
-| Redemption request | 10 | 148,122 | 148,122 | 148,122 |
-| Partial settlement | 10 | 102,075 | 102,075 | 102,075 |
-| Final settlement | 10 | 70,893 | 70,893 | 70,893 |
+| Atomic issuance | 10 | 137,061 | 137,061 | 137,061 |
+| Redemption request | 10 | 150,283 | 150,283 | 150,283 |
+| Partial settlement | 10 | 104,229 | 104,229 | 104,229 |
+| Final settlement | 10 | 73,047 | 73,047 | 73,047 |
 
 ### Atomic issuance versus advisory authorization only
 
 ```text
-Atomic issuance                 132,573 gas
-Advisory authorization           82,172 gas
+Atomic issuance                 137,061 gas
+Advisory authorization           86,660 gas
 Absolute difference              50,401 gas
-Relative difference               61.34% higher
+Relative difference               58.16% higher
 ```
 
-This does not mean atomic enforcement adds 61.34% overhead to equivalent
+This does not mean atomic enforcement adds 58.16% overhead to equivalent
 functionality. The advisory-only operation does not create ERC-20 supply.
 
 ### Atomic issuance versus two separate transactions
 
 ```text
-Advisory authorization           82,172 gas
+Advisory authorization           86,660 gas
 Independent token mint           70,834 gas
-Separate-transaction total      153,006 gas
-Atomic issuance                 132,573 gas
+Separate-transaction total      157,494 gas
+Atomic issuance                 137,061 gas
 Absolute difference             -20,433 gas
-Relative difference              13.35% lower
+Relative difference              12.97% lower
 ```
 
 In this controlled local experiment, the atomic design both enforces
@@ -174,7 +177,7 @@ signatures, networks, or clients.
 
 The measured evidence supports this scoped statement:
 
-> Under the reported local Hardhat configuration, atomic issuance used 132,573
+> Under the reported local Hardhat configuration, atomic issuance used 137,061
 > gas. It cost 50,401 gas more than advisory authorization alone, but 20,433 gas
 > less than the sum of separate advisory-authorization and independent-mint
 > transactions, while ensuring that liability and supply changes occurred in

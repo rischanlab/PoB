@@ -1,0 +1,10 @@
+config,mean_gas_submit_snapshot,mean_gas_authorize_mint_with_receipt,mean_gas_request_redemption,mean_gas_confirm_settlement
+baseline,350194,115749,121652,102740
+encumbered-4pct,347205,0,125798,100138
+buffer-1.5pct,349782,115675,123347,100460
+buffer-5pct,350194,115749,121652,102740
+settlement-T+0,350192,115750,121652,102624
+settlement-T+3,350330,116863,119592,103036
+snapshot-daily,349451,137055,129933,113179
+snapshot-30d,350598,106279,117930,93420
+cleaned-series,350192,115908,121676,102799

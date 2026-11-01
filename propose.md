@@ -1,5 +1,8 @@
 # Atomic Supply–Liability Enforcement for RWA Proof-of-Backing
 
+> Historical design note for v1.0.0. Numbers below are the submitted
+> version's. Current results and the v2 changes are in `CHANGELOG.md`.
+
 ## Methodology: atomic supply–liability enforcement
 
 The original RWA-PoB controller could decide whether a proposed issuance was compatible with signed reserve evidence, the minimum Backing Coverage Ratio (BCR), and the minimum Redemption Liquidity Coverage ratio (RLC). It could also record the resulting liability. The controller was nevertheless separate from the token contract. Its decision was therefore advisory: an issuer could retain another route to mint tokens without using the controller.

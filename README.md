@@ -17,18 +17,32 @@ The prototype compares:
 
 > **Research disclaimer:** This repository is not an audit of USDY, does not
 > reconstruct USDY's actual reserve portfolio, and is not production-ready
-> financial software. Public USDY observations are used only to calibrate the
-> scale of token liabilities. Position-level reserve, encumbrance, legal,
-> settlement, liquidity, and credential states are controlled experimental data.
+> financial software. The real-data replay uses the public USDY liability
+> series and official U.S. Treasury bill rates; the reserve portfolio itself
+> is modelled because position-level holdings are not public. Credential
+> states and signers are simulated test accounts.
+
+> **Version 2.0.0 (response to review).** Settlement now reduces eligible
+> reserves, each role signs only its own fields, reserve positions can be
+> challenged on-chain against the Merkle root, custodian receipts credit
+> subscription cash, and the evaluation adds a 1,043-day on-chain replay on real
+> data. See [`CHANGELOG.md`](CHANGELOG.md) for the full list, results, and the
+> regression test for each review comment.
 
 ## Main contributions implemented
 
-- EIP-712 signatures from five required institutional roles:
-  - custodian;
-  - administrator;
-  - valuation agent;
-  - legal or trustee role; and
-  - independent verifier.
+- Role-scoped EIP-712 claims from five required institutional roles (v2):
+  - custodian: header + gross reserves;
+  - administrator: header + token, pending, and other liabilities;
+  - valuation agent: header + eligible reserves and liquid assets;
+  - legal or trustee role: header (reserve root); and
+  - independent verifier: the complete snapshot.
+  The header is epoch, as-of time, expiry, policy hash, and reserve root.
+- Permissionless position challenge: a Merkle proof of a committed position
+  that breaks the eligibility rules suspends the snapshot (v2).
+- Custodian-signed subscription receipts, credited atomically with the mint
+  (`authorizeMintWithReceipt`) (v2).
+- Settlement reduces liquid, eligible, and gross reserves (v2 fix).
 - A canonical snapshot containing:
   - reporting epoch and timestamps;
   - reserve Merkle root;
@@ -46,6 +60,8 @@ The prototype compares:
 - Pending-redemption accounting until settlement.
 - Aggregate PoR baseline for controlled comparison.
 - Deterministic reserve scenarios using seed `42`.
+- Real-data replay: 1,043 days of USDY liabilities, reserves priced daily from
+  U.S. Treasury Daily Treasury Bill Rates, every decision made on-chain (v2).
 - CSV outputs for policy decisions and gas usage.
 
 ## Architecture
@@ -135,7 +151,8 @@ $$
 $$
 
 A mint is permitted only when the post-mint BCR meets the configured
-threshold. The current experiment uses a minimum BCR of **105%**.
+threshold. The controlled scenarios use a minimum BCR of **105%**; the
+real-data replay uses **101%**.
 
 For a proposed redemption request, the experiment calculates:
 
@@ -160,10 +177,13 @@ in the settlement queue.
 │       └── ci.yml
 ├── contracts/
 │   ├── AggregatePoRBaseline.sol
-│   └── PoBPolicyController.sol
+│   ├── PoBPolicyController.sol
+│   ├── RWABackedToken.sol
+│   └── test/PoBPolicyControllerV1.sol   # submitted version, comparison only
 ├── data/
 │   ├── raw/
 │   │   ├── README.md
+│   │   ├── treasury/                          # U.S. Treasury bill rates (committed)
 │   │   └── rwa-xyz-treasury-market-caps.csv   # ignored by Git
 │   ├── input/
 │   │   ├── usdy-calibration.json
@@ -171,14 +191,22 @@ in the settlement queue.
 │   │   └── usdy-scenarios/
 │   └── results/
 │       ├── gas-results.csv
-│       └── scenario-results.csv
+│       ├── scenario-results.csv
+│       ├── real-replay-summary.csv
+│       ├── real-replay-gas.csv
+│       └── real-replay-daily-baseline.csv
 ├── scripts/
+│   ├── fetch-treasury-bill-rates.sh
 │   ├── generate-reserve-data.mjs
-│   └── prepare-usdy-data.mjs
+│   ├── prepare-usdy-data.mjs
+│   └── validate-treasury-bill-rates.py
 ├── test/
 │   ├── ExperimentResults.ts
 │   ├── helpers.ts
-│   └── PoBPolicyController.ts
+│   ├── PoBPolicyController.ts
+│   ├── RealDataReplay.ts
+│   └── V2ReviewFixes.ts
+├── CHANGELOG.md
 ├── CITATION.cff
 ├── LICENSE
 ├── REPRODUCIBILITY.md
@@ -393,9 +421,9 @@ PoBPolicyController
 
 | Scenario | Aggregate PoR mint | RWA-PoB mint | Redemption | BCR | Post-request RLC |
 |---|---:|---:|---|---:|---:|
-| Valid | Accept | Accept | Instant | 114.1209% | 199.9999% |
-| Encumbered assets | Accept | Reject | Instant | 96.3408% | 199.9999% |
-| Liquidity stress | Accept | Accept | Queue | 114.1209% | 39.9999% |
+| Valid | Accept | Accept | Instant | 114.12% | 200.00% |
+| Encumbered assets | Accept | Reject | Instant | 96.34% | 200.00% |
+| Liquidity stress | Accept | Accept | Queue | 114.12% | 40.00% |
 
 The encumbered-assets scenario demonstrates the central difference. The
 aggregate baseline accepts minting because gross reserves exceed token
@@ -411,12 +439,36 @@ backing but queues the tested redemption because liquid assets cover only about
 
 | Operation | Gas used |
 |---|---:|
-| `submitSnapshot:valid` | 362,253 |
+| `submitSnapshot:valid` | 370,613 |
 | `baselineReport:valid` | 94,689 |
-| `submitSnapshot:encumbered-assets` | 194,904 |
+| `submitSnapshot:encumbered-assets` | 203,276 |
 | `baselineReport:encumbered-assets` | 37,789 |
-| `submitSnapshot:liquidity-stress` | 197,716 |
+| `submitSnapshot:liquidity-stress` | 206,076 |
 | `baselineReport:liquidity-stress` | 37,789 |
+
+## Real-data replay (v2)
+
+```bash
+npm run validate:treasury   # 750 rows, 4,114 checks, 0 mismatches
+npm run experiment:real     # full 1,043-day replay, 9 configurations
+```
+
+`test/RealDataReplay.ts` replays the observed USDY net flows (observed change
+minus estimated accrual) day by day against a modelled 2% cash + 26-week
+Treasury-bill ladder priced from the official daily bill curve. Each snapshot,
+mint (with a custodian receipt), redemption, and settlement goes through the
+deployed controller. Baseline results (`data/results/real-replay-summary.csv`):
+
+| | Aggregate PoR | RWA-PoB |
+|---|---:|---:|
+| Mints accepted (of 348 subscription days) | 348 | 330 |
+| Mints accepted, 4% encumbered | 348 | 0 |
+| Unsafe mints (post-mint BCR < 101%) | not checked | 0 |
+| Unsafe mints under v1 settlement logic, 4% encumbered | | 43 (USD 9.59 m) |
+
+All configurations and the model assumptions are in
+[`CHANGELOG.md`](CHANGELOG.md). Without the `RWA_POB_REAL_REPLAY=1` flag
+(as in `npm test` and CI), the replay runs for 70 days as a smoke test.
 
 
 ## View result files in PowerShell
@@ -445,7 +497,9 @@ Import-Csv data\results\gas-results.csv |
 
 ## Tests covered
 
-The current unit tests verify:
+46 tests pass (`npm test`), including 14 v2 regression tests in
+`test/V2ReviewFixes.ts` (settlement BCR, role scoping, Merkle challenge,
+subscription receipts). The controller unit tests verify:
 
 - acceptance of a complete and fresh snapshot;
 - rejection of a missing mandatory signature;
@@ -455,8 +509,8 @@ The current unit tests verify:
 - pending liability until settlement; and
 - mint suspension after snapshot staleness.
 
-The current experimental evaluation contains three deterministic scenarios.
-It should not yet be described as a comprehensive formal security evaluation.
+The evaluation contains three deterministic scenarios and the real-data
+replay. It is not a formal security evaluation.
 
 ## Reproducibility guarantees
 
@@ -492,6 +546,7 @@ GitHub Actions runs the following on every push and pull request:
 npm ci
 npm run build
 npm run generate:data
+npm run validate:treasury
 npm test
 npm run experiment
 ```
@@ -505,7 +560,8 @@ third-party CSV is not stored in the repository.
 
 - Signed credentials prove attribution and integrity, not the truth of
   off-chain statements.
-- The position-level reserve portfolio is synthetic.
+- The position-level reserve portfolio is synthetic in the scenarios and
+  modelled (cash + Treasury-bill ladder priced from real rates) in the replay.
 - Institutional signers are simulated test accounts.
 - The experiment does not reconstruct or audit USDY's actual holdings,
   encumbrances, custody accounts, or settlement records.

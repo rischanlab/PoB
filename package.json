@@ -12,7 +12,11 @@
     "experiment:atomic-gas": "hardhat test test/AtomicGasResults.ts",
     "coverage": "hardhat test --coverage",
     "prepare:usdy": "node scripts/prepare-usdy-data.mjs",
-    "generate:data": "node scripts/generate-reserve-data.mjs"
+    "generate:data": "node scripts/generate-reserve-data.mjs",
+    "test:v2": "hardhat test test/V2ReviewFixes.ts",
+    "experiment:real": "RWA_POB_REAL_REPLAY=1 hardhat test test/RealDataReplay.ts",
+    "validate:treasury": "python3 scripts/validate-treasury-bill-rates.py data/raw/treasury/*.csv",
+    "fetch:treasury": "bash scripts/fetch-treasury-bill-rates.sh"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox-viem": "5.0.7",

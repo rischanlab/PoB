@@ -1,5 +1,8 @@
 # Atomic Controller-Token Contribution: Phase A Baseline
 
+> Historical design note for v1.0.0. Numbers below are the submitted
+> version's. Current results and the v2 changes are in `CHANGELOG.md`.
+
 ## Status
 
 Phase A was executed successfully on 2026-08-23 (Asia/Jakarta) before adding
