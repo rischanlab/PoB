@@ -8,7 +8,7 @@
  *  - Liabilities: RWA.xyz "Bridged Token Value (Dollar)" for Ondo USDY,
  *    1,043 daily observations (18 Sep 2023 - 26 Jul 2026).
  *  - Reserve prices: U.S. Treasury Daily Treasury Bill Rates (bank-discount
- *    rates for 4- to 26-week bills), Aug 2023 - Jul 2026, public domain.
+ *    rates for 4- to 52-week bills), Aug 2023 - Jul 2026, public domain.
  *
  * Modelled (stated in the paper)
  *  - Reserve composition: a cash buffer plus a 26-week Treasury-bill ladder,
@@ -65,6 +65,7 @@ const TENORS: Array<[string, number]> = [
   ["13 WEEKS", 91],
   ["17 WEEKS", 119],
   ["26 WEEKS", 182],
+  ["52 WEEKS", 364],
 ];
 
 type Curve = Array<[number, number]>; // [days, bank-discount rate as fraction]
@@ -196,6 +197,9 @@ type Config = {
   encumberedBps: number; // share of bill holdings pledged (overlay)
   rateShockBps: number; // valuation haircut = price loss under this shock
   cleaned: boolean;
+  ladderDays: number; // equal-weight bill ladder 1..ladderDays; reinvest at ladderDays
+  etfShareBps: number; // short-Treasury ETF sleeve (share of gross), sold T+1
+  etfDurationDays: number; // ETF price sensitivity used for its haircut
 };
 
 const BASE: Config = {
@@ -211,6 +215,22 @@ const BASE: Config = {
   encumberedBps: 0,
   rateShockBps: 100,
   cleaned: false,
+  ladderDays: 182,
+  etfShareBps: 0,
+  etfDurationDays: 146,
+};
+
+/**
+ * Composition published by Ondo for USDY (ondo.finance/usdy, as of
+ * 29 Oct 2026): 86.12% U.S. Treasuries, 13.86% tokenized iShares 0-1 Year
+ * Treasury Bond ETF (SHVon), <0.01% bank deposits and cash; portfolio WAM
+ * 177.18 days. Modelled as a 1..364-day ladder (WAM about 182 days), a 14%
+ * ETF sleeve, and no cash target.
+ */
+const ONDO_MIX: Partial<Config> = {
+  cashTargetBps: 0,
+  ladderDays: 364,
+  etfShareBps: 1400,
 };
 
 const toWad = (usdValue: number) =>
@@ -231,16 +251,18 @@ async function runReplay(cfg: Config, obs: Obs[], curves: Map<string, Curve>) {
   const { flow, accrual, netted } = deriveFlows(obs, cfg.cleaned);
   const horizon = FULL ? obs.length : Math.min(70, obs.length);
 
-  // Initial portfolio: cash buffer + equal-weight 1..182-day bill ladder.
+  // Initial portfolio: cash target + ETF sleeve + equal-weight bill ladder.
   const L0 = obs[0].value;
   let tokens = L0;
   let cash = (cfg.cashTargetBps / 10_000) * L0;
+  let etf = (cfg.etfShareBps / 10_000) * L0 * (1 + cfg.bufferBps / 10_000);
+  const etfHaircut = ((cfg.rateShockBps / 10_000) * cfg.etfDurationDays) / 360;
   const bills = new Map<number, number>(); // maturity day index -> face
   {
     const curve = curveForDate(curves, obs[0].date);
-    const invest = L0 * (1 + cfg.bufferBps / 10_000) - cash;
-    for (let k = 1; k <= 182; k++) {
-      bills.set(k, invest / 182 / billPrice(curve, k));
+    const invest = L0 * (1 + cfg.bufferBps / 10_000) - cash - etf;
+    for (let k = 1; k <= cfg.ladderDays; k++) {
+      bills.set(k, invest / cfg.ladderDays / billPrice(curve, k));
     }
   }
 
@@ -310,9 +332,11 @@ async function runReplay(cfg: Config, obs: Obs[], curves: Map<string, Curve>) {
       if (tau <= cfg.liquidHorizonDays) liquidMv += value;
     }
     const enc = cfg.encumberedBps / 10_000;
-    const gross = cash + mv;
-    const eligible = cash + eligibleMv * (1 - enc);
-    const liquid = Math.min(cash + liquidMv * (1 - enc), eligible);
+    // The ETF sleeve is sellable T+1, so it counts as liquid after haircut.
+    const etfEligible = etf * (1 - etfHaircut);
+    const gross = cash + mv + etf;
+    const eligible = cash + eligibleMv * (1 - enc) + etfEligible;
+    const liquid = Math.min(cash + liquidMv * (1 - enc) + etfEligible, eligible);
     return { gross, eligible, liquid, curve };
   };
 
@@ -325,6 +349,8 @@ async function runReplay(cfg: Config, obs: Obs[], curves: Map<string, Curve>) {
         bills.delete(day);
       }
       tokens *= 1 + accrual[day];
+      // ETF sleeve accrues at the 4-week bill rate (money-market-like).
+      etf *= 1 + discountRate(curveForDate(curves, obs[day].date), 28) / 360;
       for (const c of claims) void c; // pending claims do not accrue
     }
     const pendingTotal = () => claims.reduce((s, c) => s + c.amount, 0);
@@ -343,10 +369,20 @@ async function runReplay(cfg: Config, obs: Obs[], curves: Map<string, Curve>) {
         cash -= sweep;
         m.sweptUsd += sweep;
       }
+      if (cfg.etfShareBps > 0) {
+        // Top the ETF sleeve back up to its target share from spare cash.
+        const target = (cfg.etfShareBps / 10_000) * (gross - Math.max(0, excess));
+        const buy = Math.min(Math.max(0, target - etf), Math.max(0, cash - cashFloor));
+        etf += buy;
+        cash -= buy;
+      }
       const reinvest = cash - cashFloor;
       if (reinvest > 0) {
-        const maturity = day + 182;
-        bills.set(maturity, (bills.get(maturity) ?? 0) + reinvest / billPrice(curve, 182));
+        const maturity = day + cfg.ladderDays;
+        bills.set(
+          maturity,
+          (bills.get(maturity) ?? 0) + reinvest / billPrice(curve, cfg.ladderDays),
+        );
         cash -= reinvest;
       }
     }
@@ -419,6 +455,13 @@ async function runReplay(cfg: Config, obs: Obs[], curves: Map<string, Curve>) {
         c.due = day + 1;
         m.settlementDaysDeferred += 1;
         continue;
+      }
+      if (cash < pay && etf > 0) {
+        // Sell the ETF sleeve first (T+1 settlement).
+        const sell = Math.min(etf, pay - cash);
+        etf -= sell;
+        cash += sell;
+        m.billSalesForSettlementUsd += sell;
       }
       if (cash < pay) {
         // Raise cash by selling the shortest bills at today's market price.
@@ -629,6 +672,8 @@ describe(`Real-data replay (${FULL ? "full 1,043 days" : "70-day smoke run"})`, 
           { ...BASE, name: "snapshot-daily", snapshotEveryDays: 1 },
           { ...BASE, name: "snapshot-30d", snapshotEveryDays: 30 },
           { ...BASE, name: "cleaned-series", cleaned: true },
+          { ...BASE, ...ONDO_MIX, name: "ondo-mix" },
+          { ...BASE, ...ONDO_MIX, name: "ondo-mix-encumbered-4pct", encumberedBps: 400 },
         ]
       : [{ ...BASE }, { ...BASE, name: "encumbered-4pct", encumberedBps: 400 }];
 

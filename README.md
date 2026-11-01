@@ -446,8 +446,8 @@ backing but queues the tested redemption because liquid assets cover only about
 ## Real-data replay (v2)
 
 ```bash
-npm run validate:treasury   # 750 rows, 4,114 checks, 0 mismatches
-npm run experiment:real     # full 1,043-day replay, 9 configurations
+npm run validate:treasury   # 750 rows, 4,864 checks, 0 mismatches
+npm run experiment:real     # full 1,043-day replay, 11 configurations
 ```
 
 `test/RealDataReplay.ts` replays the observed USDY net flows (observed change

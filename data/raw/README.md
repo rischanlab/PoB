@@ -36,6 +36,6 @@ Two checks:
 
 - `npm run validate:treasury` tests every row against the Treasury's own
   identity between the bank-discount rate and the coupon-equivalent rate
-  (750 rows, 4,114 checks, 0 mismatches at 0.02 percentage points).
+  (750 rows, 4,864 checks, 0 mismatches at 0.02 percentage points).
 - `npm run fetch:treasury -- --compare` downloads the official CSVs again and
   reports any cell that differs from the committed files.

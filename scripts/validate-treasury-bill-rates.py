@@ -4,14 +4,17 @@ For bills of 26 weeks or less, Treasury's coupon-equivalent (CE) yield is a
 deterministic function of the bank-discount (BD) rate d and days to maturity t:
     CE = Y * d / (360 - d * t)
 where Y = 366 if the period from the rate date to maturity contains 29 February,
-otherwise 365 (Treasury's leap-year convention).
+otherwise 365 (Treasury's leap-year convention). For the 52-week bill
+(t = 364 > half a year) Treasury uses the semi-annual compounding formula:
+    P = 1 - d*t/360,  a = t/(2Y) - 0.25,  b = t/Y,  c = (P - 1)/P,
+    CE = (-b + sqrt(b^2 - 4ac)) / (2a).
 Each row's published CE must match the CE recomputed from its BD within
 rounding (0.02 percentage points). A transcription error in either column, or
 a column shift, breaks the identity. Usage: python3 validate-treasury-bill-rates.py FILE...
 """
-import csv, sys
+import csv, math, sys
 from datetime import date, timedelta
-DAYS = {"4 WEEKS": 28, "6 WEEKS": 42, "8 WEEKS": 56, "13 WEEKS": 91, "17 WEEKS": 119, "26 WEEKS": 182}
+DAYS = {"4 WEEKS": 28, "6 WEEKS": 42, "8 WEEKS": 56, "13 WEEKS": 91, "17 WEEKS": 119, "26 WEEKS": 182, "52 WEEKS": 364}
 bad = 0; checked = 0; rows = 0
 for path in sys.argv[1:]:
     with open(path, newline="") as f:
@@ -33,10 +36,18 @@ for path in sys.argv[1:]:
                         continue
                     if start < feb29 <= end:
                         year_days = 366
-                calc = 100 * year_days * d / (360 - d * t)
+                def ce_of(Y):
+                    if t <= 182:
+                        return 100 * Y * d / (360 - d * t)
+                    P = 1 - d * t / 360
+                    a = t / (2 * Y) - 0.25
+                    b = t / Y
+                    c = (P - 1) / P
+                    return 100 * (-b + math.sqrt(b * b - 4 * a * c)) / (2 * a)
+                calc = ce_of(year_days)
                 # Within a week of the leap-day boundary the exact settlement
                 # date decides 365 vs 366, so accept either convention there.
-                alt = 100 * (731 - year_days) * d / (360 - d * t)
+                alt = ce_of(731 - year_days)
                 near_boundary = any(
                     abs((date(y, 2, 28) - x).days) <= 7
                     for y in range(start.year, end.year + 1) if y % 4 == 0

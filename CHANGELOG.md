@@ -47,7 +47,8 @@ original controlled scenarios as an illustration.
   Jul 2026 (750 business days, public domain).
 - `scripts/validate-treasury-bill-rates.py` (`npm run validate:treasury`):
   checks every row with the Treasury's bank-discount to coupon-equivalent
-  identity. Result: 750 rows, 4,114 checks, 0 mismatches.
+  identity, including Treasury's semi-annual formula for the 52-week bill.
+  Result: 750 rows, 4,864 checks, 0 mismatches.
 - `scripts/fetch-treasury-bill-rates.sh` (`npm run fetch:treasury`, add
   `-- --compare` to diff against the committed files).
 - npm scripts `test:v2`, `experiment:real`, `validate:treasury`,
@@ -82,7 +83,7 @@ billion), from the USDY market-cap export downloaded on 1 Nov 2026 and summed
 across its 12 chain columns. RWA.xyz had revised some history since the export
 committed in v1.0.0: the two match to the cent up to 28 Oct 2024, 884 of 1,043
 days agree within 0.1%, and some days in late Nov 2024 - early Jan 2025 are up
-to 2.9% lower in the new export. All results below use the new export. U.S. Treasury Daily Treasury Bill Rates, 4- to 26-week bank-discount
+to 2.9% lower in the new export. All results below use the new export. U.S. Treasury Daily Treasury Bill Rates, 4- to 52-week bank-discount
 rates; the 13-week rate ranges from 3.52% to 5.36%.
 
 **Model (stated assumptions).** USDY's position-level holdings are not
@@ -117,6 +118,8 @@ subscription days, 339 for the cleaned series):
 | Daily snapshots | 343 | 281 | 0 / 62 | 68 of 232 | 194 | 102.53-104.22% | 0 | 0 | 23.93 pp |
 | 30-day snapshots | 343 | 330 | 0 / 13 | 3 of 232 | 36 | 102.36-103.87% | 0 | 0 | 42.39 pp |
 | Cleaned series | 339 | 323 | 0 / 16 | 7 of 228 | 58 | 102.33-103.46% | 0 | 0 | 12.72 pp |
+| USDY published mix | 343 | 335 | 0 / 8 | 3 of 232 | 20 | 101.92-103.52% | 0 | 0 | 42.18 pp |
+| USDY mix, encumbered 4% | 343 | 0 | 343 / 57 | 60 of 232 | 152 | 98.29-99.99% | 0 | 42 (USD 23.60 m) | 19.41 pp |
 
 "Rejected (BCR / RLC)" counts rejected mints whose post-mint BCR or current
 RLC was below its threshold; a mint can fail both (buffer 1.5%: 66 + 32
@@ -136,6 +139,19 @@ T+1, 545 at T+3) but not mint decisions, because the binding constraint was
 attested liquidity. Daily snapshots produced more liquidity rejections than
 weekly ones because the portfolio is rebalanced into 26-week bills at every
 snapshot, leaving less idle cash.
+
+**USDY published mix.** Two runs use the composition Ondo publishes for USDY
+(ondo.finance/usdy, 29 Oct 2026: 86.12% U.S. Treasuries, 13.86% tokenized
+iShares 0-1 Year Treasury Bond ETF, <0.01% deposits and cash, portfolio WAM
+177.18 days): no cash target, a 1-364-day bill ladder priced from the 4- to
+52-week curve, and a 14% ETF sleeve (accrues at the 4-week rate, haircut for
+146-day duration, liquid because it settles T+1, sold first for
+redemptions). Compared with the baseline, liquidity rejections fell from 16 to
+8, queued redemptions from 7 to 3, days with RLC < 100% from 58 to 20, and the
+longest-open claim from 37 to 11 days; the minimum BCR fell from 102.44% to
+101.92% because haircuts grow with maturity. With 4% encumbrance every
+subscription was rejected and v1 accounting would have authorised 42 unsafe
+mints (USD 23.60 million).
 
 **Gas** (`data/results/real-replay-gas.csv`, baseline means; every interval
 uses a freshly deployed controller, so storage writes are cold):
@@ -164,7 +180,7 @@ pass.
 The Treasury CSVs in `data/raw/treasury/` were retrieved from the Treasury's
 daily bill-rates CSV endpoint through a fetching tool, not a direct `curl`,
 because the build environment blocked home.treasury.gov. Every row passes the
-Treasury's own discount-to-coupon-equivalent identity (4,114 checks, 0
+Treasury's own discount-to-coupon-equivalent identity (4,864 checks, 0
 mismatches), which would expose transcription or column errors, but this
 does not prove the files are identical to the official download. Before
 publication, run `npm run fetch:treasury -- --compare` on a machine with
@@ -179,7 +195,7 @@ npm run validate:treasury
 npm test                  # 46 tests, replay as a 70-day smoke run
 npm run experiment        # scenario-results.csv, gas-results.csv
 npm run experiment:atomic-gas
-npm run experiment:real   # full 1,043-day replay, 9 configurations
+npm run experiment:real   # full 1,043-day replay, 11 configurations
 ```
 
 ## [1.0.0] - 2026 - Submitted version
