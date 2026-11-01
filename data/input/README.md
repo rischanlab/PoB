@@ -12,7 +12,7 @@ Built from the FOBXX Form N-MFP3 filing (see `data/raw/README.md`) by
 `npm run prepare:franklin` and `npm run build:franklin`:
 
 - `holdings.csv`: one row per security as filed, plus cash and other assets;
-- `fund.json`: fund-level totals, liquid-asset figures and daily flows;
+- `fund.json`: fund-level totals, liquid-asset figures, daily gross flows (trade date; may include dividend reinvestment) and the daily seven-day net yield;
 - `positions.csv`, `tree.json`, `snapshot.json`: `ReservePosition` leaves,
   the OpenZeppelin Merkle tree, and the snapshot aggregates.
 

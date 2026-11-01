@@ -1,7 +1,31 @@
 # Reproducibility
 
-Every number in the IET Blockchain manuscript (v3.0, release v2.2.0) comes
+Every number in the IET Blockchain manuscript (final revision, release v2.3.0) comes
 from a CSV file in `data/results/`, produced by the commands below.
+
+## Release identifier
+
+The manuscript's results come from release **v2.3.0** of this repository
+(git tag `v2.3.0`). Check out that tag before reproducing:
+`git clone https://github.com/rischanlab/PoB && cd PoB && git checkout v2.3.0`.
+
+## What can and cannot be rerun from the release
+
+- **Rerunnable from committed files:** every test, every replay
+  configuration, every CSV in `data/results/`, both figures, and the
+  reconciliation of all five FOBXX filings. The replay inputs are the
+  processed USDY files in `data/input/` (`usdy-observed-token-value.csv`,
+  `usdy-observed-supply.csv`), the Treasury bill-rate files, and the five
+  SEC N-MFP3 XML filings, all committed.
+- **Not redistributed:** the raw RWA.xyz exports (token value per chain and
+  NAV). Rebuilding the processed USDY files from scratch
+  (`prepare:usdy-data`, `prepare:usdy-supply`) needs a fresh download from
+  RWA.xyz, whose current data may differ from the 1 Nov 2026 vintage.
+- **Not committed:** Franklin's holdings PDF, used only for an 83/83
+  identifier and value cross-check of the September filing; the Merkle root
+  does not depend on it.
+- Gas values vary by a few tens of gas between runs (timestamp-dependent
+  signatures); decisions and all non-gas figures are deterministic.
 
 ## Environment used for the reported results
 
@@ -29,8 +53,8 @@ npm run build
 npm run generate:data          # synthetic positions, seed 42
 npm run validate:treasury      # 4,864 identity checks on the bill-rate files
 npm run reconcile:franklin     # off-chain leaf/aggregate/filing reconciliation
-npm test                       # 67 tests (Hardhat prints 68: it counts test/helpers.ts)
-npm run experiment:real        # full 1,043-day replay, 39 configurations (~12 min)
+npm test                       # 72 tests (Hardhat prints 73: it counts test/helpers.ts)
+npm run experiment:real        # full 1,043-day replay, 43 configurations (~14 min)
 python3 scripts/plot-real-replay.py figures/real-replay-supply.pdf data/results/real-replay-daily-supply.csv
 python3 scripts/plot-real-replay.py figures/real-replay-baseline.pdf
 ```
@@ -53,13 +77,13 @@ and the 70-day smoke replay.
 | Table 2 (threats), Section 6.7 (trust cases) | `npm run experiment:trust` | `trust-model-results.csv` |
 | Table 4 (changes and tests), test counts | `npm test` | test log |
 | Section 6.1 (redemption price) | `npm run test:price` | `variable-price-ledger.csv` |
-| Table 6, Figure 2 (supply-mode replay, price lag) | `npm run experiment:real` | `real-replay-summary.csv` (rows `supply-*`), `real-replay-daily-supply.csv` |
+| Table 6, Figure 2 (supply-mode replay, price lag, price-risk policy) | `npm run experiment:real` | `real-replay-summary.csv` (rows `supply-*`), `real-replay-daily-supply.csv` |
 | Table 7 (inferred-flow replay) | `npm run experiment:real` | `real-replay-summary.csv`, `real-replay-daily-baseline.csv` |
 | Table 8 (encumbrance sweep), accrual and persistence paragraphs | `npm run experiment:real` | `real-replay-summary.csv` |
 | Table 9 (ablation) | `npm run experiment:real`, `npm run experiment:trust` | `real-replay-summary.csv`, `real-replay-gas.csv`, `trust-model-results.csv` |
 | Table 10 (FOBXX snapshot) | `npm run experiment:real-positions`, `npm run experiment:fobxx-flows` | `real-position-*.csv/json`, `fobxx-daily-replay*.csv` |
 | Table 11 (reconciliation) | `npm run experiment:real-positions`, `npm run reconcile:franklin` | `real-position-reconciliation.csv` |
-| Table 12 (FOBXX five months) | `npm run experiment:fobxx-monthly` | `fobxx-monthly.csv` |
+| Table 12, adjustments and sensitivity paragraphs (FOBXX five months) | `npm run experiment:fobxx-monthly` | `fobxx-monthly.csv`, `fobxx-monthly-scenarios.csv` |
 | Table 13 (controlled scenarios), Table 14 (gas) | `npm run experiment` | `scenario-results.csv`, `gas-results.csv` |
 | Atomic-issuance gas, persistent-controller gas | `npm run experiment:atomic-gas`, `npm run experiment:real` | `atomic-gas-*.csv`, `real-replay-gas.csv` |
 
@@ -67,7 +91,7 @@ Run a subset of replay configurations with
 `RWA_POB_CONFIGS=baseline,supply-baseline npm run experiment:real` (writes
 `*-subset.csv`).
 
-## Test inventory (67 tests)
+## Test inventory (72 tests)
 
 | File | Tests |
 |---|---|
@@ -77,12 +101,12 @@ Run a subset of replay configurations with
 | `ExperimentResults.ts` | 1 |
 | `AtomicGasResults.ts` | 1 |
 | `V2ReviewFixes.ts` | 14 |
-| `VariablePrice.ts` | 4 |
+| `VariablePrice.ts` (incl. price-risk policy) | 5 |
 | `RealPositionSnapshot.ts` | 5 |
 | `FobxxDailyFlows.ts` | 1 |
-| `FobxxMonthly.ts` | 1 |
+| `FobxxMonthly.ts` (base, sensitivities, large discrepancy, tables) | 4 |
 | `PersistentController.ts` | 1 |
-| `TrustModel.ts` | 7 |
+| `TrustModel.ts` (T1-T7, table) | 8 |
 | `RealDataReplay.ts` (smoke by default; full with `RWA_POB_REAL_REPLAY=1`) | 1 |
 
 Tests check specified behaviour. They are not formal verification or an

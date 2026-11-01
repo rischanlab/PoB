@@ -2,7 +2,7 @@
   "reportDate": "2026-09-30",
   "merkleRoot": "0x8f8a056afb9827fa9711b33b5df17010fe9aec9c7a53e7a13fd6c882d56595c1",
   "positions": 85,
-  "submitSnapshotGas": "459484",
+  "submitSnapshotGas": "459460",
   "proofLength": "6-7",
   "verifiedPositions": 85,
   "inconsistentPositions": 0,
@@ -113,35 +113,35 @@
       "instrument": "ZS48579",
       "detected": "true",
       "reason": "EncumberedButEligible",
-      "challengeGas": "66000"
+      "challengeGas": "66022"
     },
     {
       "tamper": "receivables counted as eligible",
       "instrument": "OTHER-ASSETS",
       "detected": "true",
       "reason": "LegallyIneligibleButEligible",
-      "challengeGas": "66871"
+      "challengeGas": "66893"
     },
     {
       "tamper": "unsettled bill counted",
       "instrument": "912797VN4",
       "detected": "true",
       "reason": "UnsettledButEligible",
-      "challengeGas": "66380"
+      "challengeGas": "66402"
     },
     {
       "tamper": "haircut skipped on longest note",
       "instrument": "3133EWTD2",
       "detected": "true",
       "reason": "EligibleExceedsHaircutValue",
-      "challengeGas": "66600"
+      "challengeGas": "66622"
     },
     {
       "tamper": "liquid value above eligible",
       "instrument": "3133ETG92",
       "detected": "true",
       "reason": "LiquidExceedsEligible",
-      "challengeGas": "67556"
+      "challengeGas": "67578"
     },
     {
       "tamper": "non-weekly-liquid note reported liquid",

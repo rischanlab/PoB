@@ -154,6 +154,11 @@ contract PoBPolicyController is AccessControl, EIP712 {
     uint256 public minimumBCR;
     uint256 public minimumRLC;
     uint64 public maximumSnapshotAge;
+    /// @notice Price-risk policy: the largest annual growth of the redemption
+    ///         price assumed between snapshots (WAD fraction, e.g. 0.05e18 for
+    ///         5% a year). Mint checks value tokens at the attested price
+    ///         grown at this rate since the snapshot. 0 = attested price only.
+    uint256 public maxPriceAccrualPerYear;
 
     // State changes after the latest signed snapshot.
     uint256 public additionalMintLiabilities;
@@ -212,6 +217,7 @@ contract PoBPolicyController is AccessControl, EIP712 {
         uint256 minimumRLC,
         uint64 maximumSnapshotAge
     );
+    event PriceRiskPolicyUpdated(uint256 maxPriceAccrualPerYear);
 
     error InvalidSnapshotEpoch();
     error InvalidSnapshotTime();
@@ -282,6 +288,17 @@ contract PoBPolicyController is AccessControl, EIP712 {
             newMinimumRLC,
             newMaximumSnapshotAge
         );
+    }
+
+    /// @notice Sets the price-risk policy used by mint checks (see
+    ///         maxPriceAccrualPerYear). It bounds, but cannot observe, price
+    ///         moves between snapshots.
+    function setPriceRiskPolicy(uint256 newMaxPriceAccrualPerYear)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
+        maxPriceAccrualPerYear = newMaxPriceAccrualPerYear;
+        emit PriceRiskPolicyUpdated(newMaxPriceAccrualPerYear);
     }
 
     function hashSnapshot(Snapshot calldata snapshot)
@@ -392,6 +409,39 @@ contract PoBPolicyController is AccessControl, EIP712 {
         return liabilityOfUnits(tokenUnits);
     }
 
+    /// @notice Attested price grown at maxPriceAccrualPerYear since the
+    ///         snapshot (rounded up); equals the attested price when the
+    ///         price-risk policy is 0.
+    function stressedRedemptionPrice() public view returns (uint256) {
+        uint256 price = _latestSnapshot.redemptionPrice;
+        if (maxPriceAccrualPerYear == 0 || block.timestamp <= _latestSnapshot.asOfTimestamp) {
+            return price;
+        }
+        uint256 elapsed = block.timestamp - _latestSnapshot.asOfTimestamp;
+        return
+            Math.mulDiv(
+                price,
+                WAD + Math.mulDiv(maxPriceAccrualPerYear, elapsed, 365 days, Math.Rounding.Ceil),
+                WAD,
+                Math.Rounding.Ceil
+            );
+    }
+
+    /// @notice Total liabilities used by mint checks after minting
+    ///         `mintUnits`: all token units valued at the stressed price
+    ///         (rounded up), plus pending and other liabilities.
+    function mintCheckLiabilities(uint256 mintUnits) public view returns (uint256) {
+        return
+            Math.mulDiv(
+                tokenUnits + mintUnits,
+                stressedRedemptionPrice(),
+                WAD,
+                Math.Rounding.Ceil
+            ) +
+            currentPendingRedemptions() +
+            _latestSnapshot.otherLiabilities;
+    }
+
     function currentPendingRedemptions() public view returns (uint256) {
         return
             _latestSnapshot.pendingRedemptions +
@@ -457,8 +507,7 @@ contract PoBPolicyController is AccessControl, EIP712 {
         view
         returns (uint256)
     {
-        uint256 postMintLiabilities =
-            currentTotalLiabilities() + mintLiabilityOf(mintUnits);
+        uint256 postMintLiabilities = mintCheckLiabilities(mintUnits);
         if (postMintLiabilities == 0) {
             return type(uint256).max;
         }
@@ -487,8 +536,7 @@ contract PoBPolicyController is AccessControl, EIP712 {
         if (!isSnapshotFresh() || mintUnits == 0) {
             return false;
         }
-        uint256 liabilities =
-            currentTotalLiabilities() + mintLiabilityOf(mintUnits);
+        uint256 liabilities = mintCheckLiabilities(mintUnits);
         uint256 bcr = ((currentEligibleReserves() + receivedCash) * WAD) /
             liabilities;
         uint256 pending = currentPendingRedemptions();

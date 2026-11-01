@@ -1,0 +1,5 @@
+scenario,cash_mints_accepted,cash_mints_rejected,noncash_mints_accepted,noncash_mints_rejected,noncash_minted_usd_m,redemptions_queued,settlements,min_post_request_rlc_pct,adjustments,adjusted_usd,halted
+cash-receipt-T0,85,0,0,0,0.00,0,83,2218.13,4,139.79,no
+reinvest-T0,20,0,20,1,2.13,0,21,2210.27,0,0.00,2026-06-30
+cash-receipt-T1,85,0,0,0,0.00,0,83,2218.13,4,139.79,no
+synthetic-discrepancy-1m-june,21,0,0,0,0.00,0,21,,0,0.00,halted at 2026-06-30; snapshot rejected; minting stopped after expiry

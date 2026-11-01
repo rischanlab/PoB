@@ -7,6 +7,9 @@
  * redemption fixes a USD claim at the request-time price (rounded down), and
  * token liabilities follow each new price. An independent ledger (units, fixed
  * USD claims, reserves) is compared with the controller after every step.
+ * The last test covers the optional price-risk policy (maxPriceAccrualPerYear),
+ * which values tokens in mint checks at the attested price grown at a policy
+ * rate since the snapshot.
  */
 import assert from "node:assert/strict";
 import { mkdir, writeFile } from "node:fs/promises";
@@ -16,7 +19,7 @@ import { keccak256, toBytes } from "viem";
 
 import { POLICY_HASH, WAD, liabilityOf, makeSnapshot, signSnapshot, signSubscriptionReceipt, usd } from "./helpers.js";
 
-const { viem } = await hre.network.create();
+const { viem, networkHelpers } = await hre.network.create();
 const ROLE_NAMES = ["CUSTODIAN_ROLE", "ADMINISTRATOR_ROLE", "VALUATION_ROLE", "LEGAL_ROLE", "VERIFIER_ROLE", "SETTLEMENT_ROLE", "TOKEN_ROLE"];
 const role = (n: string) => keccak256(toBytes(n));
 const price = (s: string) => usd(s); // 18-decimal price per token
@@ -182,5 +185,36 @@ describe("Variable redemption price", function () {
     assert.equal(await c.read.tokenUnits(), usd("75"));
     assert.equal(await c.read.currentPendingRedemptions(), usd("26.78"));
     assert.equal(await c.read.currentTokenLiabilities(), usd("80.34"));
+  });
+
+  it("price-risk policy: mint checks use the attested price grown at the policy rate", async function () {
+    const env = await deploy();
+    const { c, as } = env;
+    const p = price("1.10");
+    await submit(env, 1n, { units: usd("1000"), p, pending: 0n, gross: usd("1200"), eligible: usd("1122.15"), liquid: usd("200") });
+    assert.equal(await c.read.maxPriceAccrualPerYear(), 0n);
+    assert.equal(await c.read.stressedRedemptionPrice(), p);
+    // 12 hours after the snapshot, the NAV may have accrued.
+    await networkHelpers.time.increase(43_200);
+    // Attested price only (policy 0): 1122.15 / ceil(1010 x 1.10) = 101.004% >= 101%.
+    assert.equal(await c.read.mintCheckLiabilities([usd("10")]), usd("1111"));
+    assert.equal(await c.read.canMint([usd("10")]), true);
+    // Policy 5% a year: price 1.10 x (1 + 0.05 x 0.5/365) -> post-mint BCR 100.997% < 101%.
+    await assert.rejects(c.write.setPriceRiskPolicy([(5n * WAD) / 100n], { account: env.holder.account }));
+    await c.write.setPriceRiskPolicy([(5n * WAD) / 100n], as);
+    const stressed = await c.read.stressedRedemptionPrice();
+    const elapsed = (await env.client.getBlock()).timestamp - (await c.read.latestSnapshot()).asOfTimestamp;
+    const growth = ((5n * WAD) / 100n * elapsed + 365n * 86_400n - 1n) / (365n * 86_400n);
+    assert.equal(stressed, (p * (WAD + growth) + WAD - 1n) / WAD);
+    assert.ok(stressed > p);
+    assert.equal(await c.read.canMint([usd("10")]), false);
+    await assert.rejects(c.write.authorizeMint([usd("10")], as), /MintPolicyFailed/);
+    // Recorded liabilities, claims and continuity still use the attested price.
+    assert.equal(await c.read.currentTokenLiabilities(), usd("1100"));
+    assert.equal(await c.read.redemptionClaimOf([usd("10")]), usd("11"));
+    // A smaller mint that clears the stressed check is accepted and booked at the attested price.
+    assert.equal(await c.read.canMint([usd("5")]), true);
+    await c.write.authorizeMint([usd("5")], as);
+    assert.equal(await c.read.currentTokenLiabilities(), usd("1105.5"));
   });
 });

@@ -41,8 +41,14 @@ The prototype compares:
 > price** (token supply and price in every snapshot, unit-denominated mints
 > and redemptions, liabilities rounded up and claims rounded down), replays
 > USDY's **observed supply and daily NAV** on one controller, and runs
-> **five monthly FOBXX filings** (May-Sep 2026) on one controller. 67 tests.
-> See [`CHANGELOG.md`](CHANGELOG.md).
+> **five monthly FOBXX filings** (May-Sep 2026) on one controller.
+
+> **Version 2.3.0 (final revision; the version the paper evaluates).** Adds an
+> optional **price-risk policy** for mint checks, FOBXX modelled-receipt,
+> dividend-reinvestment and T+1 sensitivities with bounded non-cash
+> continuity adjustments, and a trust test with an honest custodian and a
+> colluding valuation agent and verifier. 72 tests, 43 replay
+> configurations. See [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Main contributions implemented
 
@@ -83,6 +89,12 @@ The prototype compares:
   `tokenLiabilities == ceil(tokenSupply * price)`. Mints and redemptions are
   in token units; a mint adds `ceil((U+u)P) - ceil(UP)` to liabilities and a
   redemption fixes a claim of `floor(uP)` at request.
+- Optional price-risk policy (v2.3): `setPriceRiskPolicy(g)` (admin only,
+  default 0) makes the mint checks value units at
+  `P~ = ceil(P * (1 + g * elapsed / 365 days))`. Recorded liabilities,
+  redemption claims and continuity still use the attested price `P`. The
+  enforced guarantee is coverage at the attested price (grown at `g` when
+  set); unobserved price moves above `g` are not covered.
 - Historical-data-driven simulated replay: 1,043 days of observed USDY
   bridged supply and daily NAV on one persistent controller (v2.2), a
   modelled portfolio priced daily from U.S. Treasury bill rates, every
@@ -465,18 +477,18 @@ backing but queues the tested redemption because liquid assets cover only about
 
 | Operation | Gas used |
 |---|---:|
-| `submitSnapshot:valid` | 438,717 |
+| `submitSnapshot:valid` | 438,741 |
 | `baselineReport:valid` | 94,701 |
-| `submitSnapshot:encumbered-assets` | 211,387 |
+| `submitSnapshot:encumbered-assets` | 211,399 |
 | `baselineReport:encumbered-assets` | 37,801 |
-| `submitSnapshot:liquidity-stress` | 214,175 |
+| `submitSnapshot:liquidity-stress` | 214,199 |
 | `baselineReport:liquidity-stress` | 37,801 |
 
 ## Historical-data-driven simulated replay (v2, extended in v2.2)
 
 ```bash
 npm run validate:treasury   # 750 rows, 4,864 checks, 0 mismatches
-npm run experiment:real     # full 1,043-day replay, 39 configurations
+npm run experiment:real     # full 1,043-day replay, 43 configurations (about 14 min)
 ```
 
 `test/RealDataReplay.ts` replays USDY day by day against a modelled 2% cash +
@@ -484,24 +496,32 @@ npm run experiment:real     # full 1,043-day replay, 39 configurations
 snapshot, mint (with a custodian receipt), redemption, and settlement goes
 through the deployed controller.
 
-**Supply mode (primary, 13 runs `supply-*`).** Bridged supply = token value /
+**Supply mode (primary, 17 runs `supply-*`, 4 of them with the price-risk policy).** Bridged supply = token value /
 NAV (exact, `data/input/usdy-observed-supply.csv`); daily supply changes are
 minted or redeemed in token units on one persistent controller, and each
 weekly snapshot attests the controller's units and that day's NAV as the
 redemption price.
 
-| Supply-mode run | PoB mints (of 504 increases) | Rejected BCR/RLC | Queued (of 309) | BCR range | Unsafe | Price lag max pp / unsafe |
-|---|---:|---:|---:|---|---:|---:|
-| Baseline (3%, weekly, T+1) | 474 | 0/30 | 15 | 102.56-103.91 | 0 | 0.089 / 0 |
-| Buffer 1.5% | 474 | 0/30 | 15 | 101.06-101.78 | 0 | 0.087 / 1 |
-| Daily snapshots | 410 | 0/94 | 67 | 102.59-104.24 | 0 | 0.000 / 0 |
-| Encumbered 2% / 3% / 4% | 48 / 5 / 0 | | | | 0 | |
-| A1 / A2 / A3 | 450 / 322 / 474 | 54/0, 54/146, 0/30 | 0 / 94 / 15 | | 0 | A1: 1 |
+| Supply-mode run | PoB mints (of 504 increases) | Rejected BCR/RLC/price | Queued (of 309) | Unsafe at attested price | Below 101% at day's NAV | Min post-mint BCR attested / at NAV (%) |
+|---|---:|---:|---:|---:|---:|---|
+| Baseline (3%, weekly, T+1) | 474 | 0/30/0 | 15 | 0 | 0 | 102.559 / 102.490 |
+| Buffer 1.5% | 474 | 0/30/0 | 15 | 0 | 1 | 101.063 / 100.995 |
+| Daily snapshots | 410 | 0/94/0 | 67 | 0 | 0 | 102.615 / 102.615 |
+| A1 eligible BCR, single attestor | 450 | 54/0/0 | 0 | 0 | 1 | 101.038 / 100.980 |
+| Baseline, g = 8% | 474 | 0/30/0 | 15 | 0 | 0 | 102.559 / 102.490 |
+| Buffer 1.5%, g = 8% | 467 | 0/30/7 | 15 | 0 | 0 | 101.063 / 101.044 |
+| Buffer 1.5%, g = 5% | 473 | 0/30/1 | 15 | 0 | 0 | 101.063 / 101.015 |
+| A1, g = 8% | 448 | 56/0/0 | 0 | 0 | 0 | 101.125 / 101.096 |
 
-"Price lag" re-values liabilities at the day's NAV instead of the last
-attested one: between weekly snapshots post-mint BCR was at most 0.089 pp
-lower, and in two runs one mint each would have been just below 101% on that
-basis. PoR accepted all 504 increases in every run.
+The full table (encumbrance, A2, A3, cleaned series, USDY mix) is
+`data/results/real-replay-summary.csv`. "At NAV" re-values liabilities at the
+day's NAV instead of the last attested one. Without the price-risk policy,
+one mint in each of two runs was accepted at the attested price but was just
+below 101% at the day's NAV; this adverse result is kept. With `g = 8%` or
+`5%` no accepted mint was below 101% at the day's NAV in this sample, at the
+cost of 7 or 1 extra rejections. The observed lag is a property of this NAV
+series and weekly cadence, not a general bound. PoR accepted all 504
+increases in every run.
 
 **Inferred-flow mode (sensitivity, 26 runs).** Net flows inferred from the
 token value minus an estimated accrual, at `P_red = 1`. Only 61% of inferred
@@ -511,7 +531,7 @@ inflow days are supply-increase days. Results:
 |---|---:|---:|
 | Mints accepted (of 343 inferred inflow days) | 343 | 327 |
 | Mints accepted, 4% encumbered (hypothetical stress) | 343 | 0 |
-| Unsafe mints (post-mint BCR < 101%), all 39 runs | not checked | 0 |
+| Unsafe mints at the attested price (post-mint BCR < 101%), all 43 runs | not checked | 0 |
 | Inferred mints satisfying the *reconstructed* v1 rule below threshold, 4% encumbered | | 43 (USD 9.60 m) |
 
 Ablation (same data and thresholds):
@@ -565,8 +585,8 @@ holdings PDF to the dollar.
 | Mint of USD 1 m, minBCR 99.7 / 99.6 / 99.5% (sensitivity) | no receipt: R / R / A; with receipt: R / A / A |
 | BCR after a USD 100 m receipt-backed mint | 99.72% (a receipt cannot lift BCR above 100%) |
 | Leaves vs signed totals vs filing (`npm run reconcile:franklin`) | reconciled |
-| Disclosed Sep-2026 daily flows on one controller, minBCR 99.5% / 100% | 21 / 0 of 21 subscription days accepted |
-| `submitSnapshot` gas | 459,484 |
+| Disclosed Sep-2026 daily flows on one controller (receipts modelled), minBCR 99.5% / 100% | 21 / 0 of 21 subscription days accepted |
+| `submitSnapshot` gas | 459,460 |
 
 A 1:1 government money fund has no over-collateralisation and carries its
 securities at amortised cost, so at market value with haircuts its BCR is just
@@ -582,7 +602,7 @@ leaves with signed totals; an omission or fabrication with consistent totals
 
 Five tampered versions of real positions are each caught by a permissionless
 challenge that suspends minting (`data/results/real-position-challenges.csv`,
-66,000-67,556 gas): a repo pledged elsewhere but counted, receivables counted
+66,022-67,578 gas): a repo pledged elsewhere but counted, receivables counted
 as eligible, an unsettled bill counted, a haircut skipped, and liquid value
 above eligible value. A non-weekly-liquid note reported as liquid is *not*
 caught, because the contract does not test liquidity classification; this
@@ -597,13 +617,18 @@ not a detection rate, since the rules and the tampering were written together.
 
 ```bash
 npm run build:franklin-monthly    # 31 May, 30 Jun, 31 Jul, 31 Aug 2026 filings
-npm run experiment:fobxx-monthly  # data/results/fobxx-monthly.csv
+npm run experiment:fobxx-monthly  # fobxx-monthly.csv, fobxx-monthly-scenarios.csv
 ```
 
-The 31 May - 30 Sep 2026 filings become five epochs of one controller
+The 31 May - 30 Sep 2026 filings (a selected sample; older filings exist)
+become five epochs of one controller
 (minBCR 99.5%). Between month ends the controller books the next month's
 disclosed daily flows; each month-end snapshot attests the filed shares as
 token supply and is accepted only if the controller's unit count matches.
+The filing reports trade-date gross subscriptions and redemptions; it does
+not separate reinvested dividends from new cash or report cash receipt and
+payment dates. The base case therefore *models* subscriptions as
+receipt-backed cash on the trade date and same-day (T+0) settlement.
 
 | Month end | Leaves | Securities in / out | Subs / reds (USD m) | Flow vs shares residual (USD) | Shares (USD m) | BCR |
 |---|---:|---:|---:|---:|---:|---:|
@@ -614,9 +639,30 @@ token supply and is accepted only if the controller's unit count matches.
 | 30 Sep | 85 | 19 / 18 | 23.40 / 42.07 | 23.21 | 667.97 | 99.68% |
 
 Every leaf verifies and every month reconciles. Each month the filed share
-change differs from the filed daily flows by a few dollars; the continuity
-check rejects the first submission and the residual is booked as an explicit
-adjustment before resubmission.
+change differs from the filed daily flows by a few dollars, and the
+continuity check rejects the first submission. A residual of at most
+USD 1,000 is then booked by the token role without any cash movement: a
+positive one as a mint without a receipt (raises units and liabilities, not
+reserves, and must pass the BCR check), a negative one as a redemption
+request whose claim stays pending (the June USD 71.30 is still pending in
+September). The snapshot is then resubmitted. A larger residual is not
+adjusted: with USD 1 million added to the June filing the snapshot stays
+rejected and minting stops when the May snapshot expires. The adjustment
+records that two filed figures disagree; it does not explain why.
+
+| Scenario | Cash mints accepted | Non-cash mints accepted / rejected | Queued | Adjustments (USD) | Halted |
+|---|---:|---:|---:|---:|---|
+| Modelled cash receipts, T+0 (base) | 85 of 85 | 0 / 0 | 0 | 4 (139.79) | no |
+| Estimated dividend reinvestment, T+0 | 20 | 20 / 1 (USD 2.13 m minted) | 0 | 0 | 30 Jun 2026 |
+| Modelled cash receipts, T+1 | 85 of 85 | 0 / 0 | 0 | 4 (139.79) | no |
+| Synthetic USD 1 m discrepancy (June) | 21 | 0 / 0 | 0 | 0 | 30 Jun 2026, minting stopped after expiry |
+
+Reinvestment is estimated from shares outstanding and the filed seven-day
+net yield (USD 2.02-2.36 m a month) and minted without a receipt, because it
+creates shares but brings no new cash. The May snapshot leaves about
+USD 2.32 m of headroom at minBCR 99.5%, so the 21st such mint fails: the
+controller has no channel to credit income that accrues between snapshots.
+This is reported as a finding.
 
 ## View result files in PowerShell
 
@@ -644,14 +690,15 @@ Import-Csv data\results\gas-results.csv |
 
 ## Tests covered
 
-67 tests pass (`npm test`; Hardhat also lists `test/helpers.ts` as a passing
-file, so it prints 68). The per-file inventory is in
+72 tests pass (`npm test`; Hardhat also lists `test/helpers.ts` as a passing
+file, so it prints 73). The per-file inventory is in
 [`REPRODUCIBILITY.md`](REPRODUCIBILITY.md). They include 14 v2 regression
-tests in `test/V2ReviewFixes.ts`, 4 redemption-price tests in
+tests in `test/V2ReviewFixes.ts`, 5 redemption-price and price-risk tests in
 `test/VariablePrice.ts`, 5 tests on the real FOBXX position file (including
 aggregate reconciliation and the 100/80/90 example), the FOBXX daily-flow and
-five-month tests, a five-epoch persistent-controller test, and 7 trust-model
-tests. The controller unit tests verify:
+five-month tests (base, reinvestment, T+1, large discrepancy), a five-epoch
+persistent-controller test, and 8 trust-model tests (including T7: honest
+custodian, colluding valuation agent and verifier). The controller unit tests verify:
 
 - acceptance of a complete and fresh snapshot;
 - rejection of a missing mandatory signature;
@@ -688,7 +735,10 @@ npm.cmd run experiment
 ```
 
 For a paper or archived release, cite a fixed Git tag or release rather than the
-moving `main` branch.
+moving `main` branch. The paper evaluates release `v2.3.0`; see
+[`REPRODUCIBILITY.md`](REPRODUCIBILITY.md) for the clone and checkout
+commands and for what cannot be rerun from the release (the raw RWA.xyz
+exports are not redistributed; the processed series are committed).
 
 ## Continuous integration
 
@@ -724,13 +774,24 @@ third-party CSV is not stored in the repository.
 - The contract does not check that positions sum to the signed totals or that
   the position file is complete; omissions with consistent totals are
   visible only against an external record (off-chain).
-- The redemption price is attested per snapshot and is stale in between;
-  the replay measures the effect (at most 0.089 pp of BCR weekly) but no
-  accrual-aware price is implemented.
-- USDY daily supply changes are net bridged-supply changes from a market-data
-  aggregator; no public primary-market record was available to validate them.
-- Five signer accounts are not proof of five independent institutions;
-  compromised governance and collusion are not resisted.
+- The redemption price is attested per snapshot. The enforced guarantee is
+  coverage at the attested price; the optional price-risk policy grows that
+  price at a policy-set rate for mint checks only. Price moves above that
+  rate, or falls followed by rises between snapshots, are not covered.
+- USDY supply is derived as RWA.xyz bridged token value / NAV, which
+  reconstructs the aggregator's own supply metric. It is not independent
+  evidence and does not separate bridge movements from issuer mints and
+  burns; no direct mint and burn series was used to validate it.
+- FOBXX cash receipts and settlement timing are modelled; the filings report
+  trade-date gross flows that may include dividend reinvestment.
+- Continuity adjustments record a mismatch between two filed figures; they do
+  not establish its cause and are not independent verification.
+- Five signer accounts are not proof of five independent institutions.
+  An honest signer protects only its own fields: an honest custodian does
+  not stop a valuation agent and verifier from jointly approving inflated
+  eligible reserves below gross (test T7). Compromised governance and
+  collusion are not resisted.
+- The prototype is not a proof of solvency and does not prevent fraud.
 - Institutional signers are simulated test accounts.
 - The experiment does not reconstruct or audit USDY's actual holdings,
   encumbrances, custody accounts, or settlement records.
