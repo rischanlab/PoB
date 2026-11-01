@@ -66,6 +66,11 @@ original controlled scenarios as an illustration.
 - `data/raw/README.md`: removed a PowerShell wrapper that had been committed
   into the file; documents both data sources.
 - `.gitignore`: `data/raw/treasury/` is committed (public-domain data).
+- `scripts/prepare-usdy-data.mjs`: accepts an input path and `--until`, and
+  reads both RWA.xyz layouts (one column per product, or one column per chain,
+  which it sums). `data/input/usdy-*` and `data/input/usdy-scenarios/*` were
+  regenerated from the 1 Nov 2026 export (latest value USD 2,161,446,182.11
+  instead of 2,161,765,037.00).
 - Gas results regenerated (the role-scoped verification costs about 8,400
   more gas per snapshot than v1).
 
@@ -73,7 +78,11 @@ original controlled scenarios as an illustration.
 
 **Data (real).** RWA.xyz "Bridged Token Value (Dollar)" for Ondo USDY, 1,043
 daily observations, 18 Sep 2023 - 26 Jul 2026 (USD 30.28 million to USD 2.16
-billion). U.S. Treasury Daily Treasury Bill Rates, 4- to 26-week bank-discount
+billion), from the USDY market-cap export downloaded on 1 Nov 2026 and summed
+across its 12 chain columns. RWA.xyz had revised some history since the export
+committed in v1.0.0: the two match to the cent up to 28 Oct 2024, 884 of 1,043
+days agree within 0.1%, and some days in late Nov 2024 - early Jan 2025 are up
+to 2.9% lower in the new export. All results below use the new export. U.S. Treasury Daily Treasury Bill Rates, 4- to 26-week bank-discount
 rates; the 13-week rate ranges from 3.52% to 5.36%.
 
 **Model (stated assumptions).** USDY's position-level holdings are not
@@ -94,51 +103,51 @@ deployed for each snapshot interval and open claims are re-registered.
 metric in the same run (v1 BCR = snapshot eligible + credited cash, settlement
 not deducted).
 
-**Results** (`data/results/real-replay-summary.csv`; mint counts out of 348
-subscription days, 344 for the cleaned series):
+**Results** (`data/results/real-replay-summary.csv`; mint counts out of 343
+subscription days, 339 for the cleaned series):
 
 | Configuration | PoR mints | PoB mints | Rejected (BCR / RLC) | Queued redemptions | Days RLC < 100% | BCR range | Unsafe mints v2 | Unsafe mints under v1 logic | Max v1 BCR overstatement |
 |---|---:|---:|---:|---:|---:|---|---:|---:|---:|
-| Baseline (3% buffer, weekly, T+1) | 348 | 330 | 0 / 18 | 14 of 274 | 58 | 102.44-103.91% | 0 | 0 | 42.18 pp |
-| Encumbered 4% | 348 | 0 | 348 / 90 | 89 of 274 | 284 | 98.37-100.49% | 0 | 43 (USD 9.59 m) | 10.88 pp |
-| Buffer 1.5% | 348 | 266 | 63 / 35 | 41 of 274 | 124 | 100.74-101.78% | 0 | 14 (USD 30.39 m) | 42.18 pp |
-| Buffer 5% | 348 | 330 | 0 / 18 | 14 of 274 | 58 | 104.44-106.75% | 0 | 0 | 42.18 pp |
-| Settlement T+0 | 348 | 330 | 0 / 18 | 14 of 274 | 58 | 102.44-103.91% | 0 | 0 | 42.18 pp |
-| Settlement T+3 | 348 | 330 | 0 / 18 | 14 of 274 | 58 | 102.44-103.91% | 0 | 0 | 42.18 pp |
-| Daily snapshots | 348 | 286 | 0 / 62 | 70 of 274 | 195 | 102.53-104.22% | 0 | 0 | 23.93 pp |
-| 30-day snapshots | 348 | 333 | 0 / 15 | 10 of 274 | 36 | 102.36-103.87% | 0 | 0 | 42.39 pp |
-| Cleaned series | 344 | 326 | 0 / 18 | 14 of 270 | 58 | 102.33-103.50% | 0 | 0 | 13.54 pp |
+| Baseline (3% buffer, weekly, T+1) | 343 | 327 | 0 / 16 | 7 of 232 | 58 | 102.44-103.91% | 0 | 0 | 42.18 pp |
+| Encumbered 4% | 343 | 0 | 343 / 88 | 73 of 232 | 284 | 98.41-100.49% | 0 | 43 (USD 9.60 m) | 10.68 pp |
+| Buffer 1.5% | 343 | 262 | 66 / 32 | 32 of 232 | 123 | 100.74-101.78% | 0 | 19 (USD 30.95 m) | 42.18 pp |
+| Buffer 5% | 343 | 327 | 0 / 16 | 7 of 232 | 58 | 104.44-106.75% | 0 | 0 | 42.18 pp |
+| Settlement T+0 | 343 | 327 | 0 / 16 | 7 of 232 | 58 | 102.44-103.91% | 0 | 0 | 42.18 pp |
+| Settlement T+3 | 343 | 327 | 0 / 16 | 7 of 232 | 58 | 102.44-103.91% | 0 | 0 | 42.18 pp |
+| Daily snapshots | 343 | 281 | 0 / 62 | 68 of 232 | 194 | 102.53-104.22% | 0 | 0 | 23.93 pp |
+| 30-day snapshots | 343 | 330 | 0 / 13 | 3 of 232 | 36 | 102.36-103.87% | 0 | 0 | 42.39 pp |
+| Cleaned series | 339 | 323 | 0 / 16 | 7 of 228 | 58 | 102.33-103.46% | 0 | 0 | 12.72 pp |
 
 "Rejected (BCR / RLC)" counts rejected mints whose post-mint BCR or current
-RLC was below its threshold; a mint can fail both (buffer 1.5%: 63 + 35
-reasons for 82 rejections). In every configuration the on-chain liquid and
+RLC was below its threshold; a mint can fail both (buffer 1.5%: 66 + 32
+reasons for 81 rejections). In every configuration the on-chain liquid and
 eligible values never exceeded the modelled portfolio
 (`days_onchain_liquid_above_actual` = `days_onchain_eligible_above_actual` =
 0), and no accepted mint left the post-mint BCR below θ_S.
 
 Main findings: the aggregate PoR rule accepted every subscription, including
-all 348 in the encumbered case where eligible backing was below 101% on every
+all 343 in the encumbered case where eligible backing was below 101% on every
 day; RWA-PoB rejected all of them. Under v1 accounting, the same encumbered
-run would have authorised 43 mints (USD 9.59 million) while true BCR was below
-the threshold. In the baseline, all 18 rejections were liquidity-driven: they
+run would have authorised 43 mints (USD 9.60 million) while true BCR was below
+the threshold. In the baseline, all 16 rejections were liquidity-driven: they
 fell on days when unpaid redemptions exceeded attested liquid assets. Settlement
-delay changed how long claims stayed open (days with pending claims: 320 at
-T+1, 606 at T+3) but not mint decisions, because the binding constraint was
+delay changed how long claims stayed open (days with pending claims: 285 at
+T+1, 545 at T+3) but not mint decisions, because the binding constraint was
 attested liquidity. Daily snapshots produced more liquidity rejections than
 weekly ones because the portfolio is rebalanced into 26-week bills at every
 snapshot, leaving less idle cash.
 
 **Gas** (`data/results/real-replay-gas.csv`, baseline means; every interval
 uses a freshly deployed controller, so storage writes are cold):
-`submitSnapshot` 350,194; `authorizeMintWithReceipt` 115,749;
-`requestRedemption` 121,652; `confirmSettlement` 102,740.
+`submitSnapshot` 350,191; `authorizeMintWithReceipt` 115,973;
+`requestRedemption` 121,752; `confirmSettlement` 104,022.
 
 ### Controlled scenarios (retained, two decimals)
 
 `data/results/scenario-results.csv`: valid BCR 114.12% / RLC 200.00%;
 encumbered BCR 96.34% (PoR accepts, RWA-PoB rejects); liquidity stress RLC
-40.00% (queued). `data/results/gas-results.csv`: submitSnapshot 370,613 /
-203,276 / 206,076 vs aggregate PoR 94,689 / 37,789 / 37,789.
+40.00% (queued). `data/results/gas-results.csv`: submitSnapshot 370,625 /
+203,288 / 206,076 vs aggregate PoR 94,701 / 37,801 / 37,801.
 `data/results/atomic-gas-summary.csv`: atomic issuance 137,061 vs 86,660 +
 70,834 = 157,494 for advisory authorisation plus an independent mint (20,433
 less, 12.97%).

@@ -1,12 +1,28 @@
 {
   "source": "RWA.xyz downloaded CSV",
-  "sourceFile": "data/raw/rwa-xyz-treasury-market-caps.csv",
+  "sourceFile": "data/raw/rwa-xyz-usdy-market-caps-2026-11-01.csv",
+  "layout": "per-chain (summed)",
+  "chains": [
+    "Ethereum",
+    "Solana",
+    "BNB Chain",
+    "Stellar",
+    "Arbitrum",
+    "Noble",
+    "Mantle",
+    "Sui",
+    "Aptos",
+    "Plume",
+    "SEI",
+    "Tempo"
+  ],
+  "until": "2026-07-26",
   "product": "Ondo U.S. Dollar Yield",
   "measure": "Bridged Token Value (Dollar)",
   "interpretation": "Observed token value used to calibrate liabilities; not treated as independently verified reserve value.",
   "observations": 1043,
   "firstDate": "2023-09-18",
   "lastDate": "2026-07-26",
-  "latestObservedTokenValueUsd": "2161765036.997564",
-  "latestDailyChangeUsd": "207007.237690"
+  "latestObservedTokenValueUsd": "2161446182.114861",
+  "latestDailyChangeUsd": "206976.764017"
 }

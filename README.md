@@ -184,7 +184,7 @@ in the settlement queue.
 │   ├── raw/
 │   │   ├── README.md
 │   │   ├── treasury/                          # U.S. Treasury bill rates (committed)
-│   │   └── rwa-xyz-treasury-market-caps.csv   # ignored by Git
+│   │   └── rwa-xyz-*.csv                      # ignored by Git
 │   ├── input/
 │   │   ├── usdy-calibration.json
 │   │   ├── usdy-observed-liabilities.csv
@@ -304,25 +304,21 @@ data/results/gas-results.csv
 The original RWA.xyz CSV is intentionally excluded from Git. To reproduce the
 data-preparation stage:
 
-1. Download the Treasury market-cap CSV from RWA.xyz.
-2. Save it as:
+1. On RWA.xyz, open Ondo U.S. Dollar Yield (USDY), choose the market-cap
+   chart with the measure "Bridged Token Value (Dollar)", and download the
+   CSV. It has one column per chain (Ethereum, Solana, BNB Chain, ...).
+2. Run:
 
-```text
-data/raw/rwa-xyz-treasury-market-caps.csv
+```bash
+node scripts/prepare-usdy-data.mjs path/to/rwa-xyz-usdy-market-caps.csv --until 2026-07-26
 ```
 
-3. Run:
-
-```powershell
-npm.cmd run prepare:usdy
-```
-
-The preparation script selects:
-
-```text
-Product: Ondo U.S. Dollar Yield
-Measure: Bridged Token Value (Dollar)
-```
+The script sums the chain columns for each date. The committed series was
+produced from the export downloaded on 2026-11-01. The script also accepts the
+older Treasury market-cap export (one column per product), from which it reads
+the "Ondo U.S. Dollar Yield" column. RWA.xyz revises history from time to time:
+an export downloaded in mid-2026 matched to the cent up to 2024-10-28 and
+differed by up to 2.9% on some later days.
 
 It writes:
 
@@ -348,8 +344,9 @@ The processed calibration contains:
 | Observations | 1,043 |
 | First observation | 2023-09-18 |
 | Last observation | 2026-07-26 |
-| Latest observed token value | $2,161,765,036.997564 |
-| Source measure | Bridged Token Value (Dollar) |
+| Latest observed token value | $2,161,446,182.114861 |
+| Source measure | Bridged Token Value (Dollar), summed across 12 chains |
+| Source file | RWA.xyz USDY market-caps export, downloaded 2026-11-01 |
 
 The observed token value calibrates the liability scale. It is not treated as
 independent proof of USDY's legal liabilities or reserves.
@@ -379,27 +376,27 @@ encumbrance, legal eligibility, settlement finality, and liquid value.
 ```text
 Scenario: valid
   Liability date: 2026-07-26
-  Token liabilities: $2161765036.997564
-  Gross reserves: $2486029792.547198
-  Eligible reserves: $2479361762.407983
-  Liquid assets: $216176503.699756
-  Merkle root: 0x50363b2ecc5eb8f344003716a7de7645a678556583512712bbfab22f0ff47903
+  Token liabilities: $2161446182.114861
+  Gross reserves: $2485663109.432090
+  Eligible reserves: $2478996062.810477
+  Liquid assets: $216144618.211486
+  Merkle root: 0xd936203f5b7c8087fb46d1982f5d186f4ceadf1bb78dba8ed1df1880ac2a4463
 
 Scenario: encumbered-assets
   Liability date: 2026-07-26
-  Token liabilities: $2161765036.997564
-  Gross reserves: $2486029792.547198
-  Eligible reserves: $2093076978.470358
-  Liquid assets: $216176503.699756
-  Merkle root: 0x51a3707a10405c3e7e5dee33a0fcdd516c6a7ec62bc920d86cabace46b14b9fe
+  Token liabilities: $2161446182.114861
+  Gross reserves: $2485663109.432090
+  Eligible reserves: $2092768254.902791
+  Liquid assets: $216144618.211486
+  Merkle root: 0xfaa711c1f81d3dec4c95a5716998de876fd4b879d2ba6e4202b1ec8d8b27863b
 
 Scenario: liquidity-stress
   Liability date: 2026-07-26
-  Token liabilities: $2161765036.997564
-  Gross reserves: $2486029792.547198
-  Eligible reserves: $2479361762.407983
-  Liquid assets: $43235300.739951
-  Merkle root: 0xe949f27447550c77bc34bddb0d96ec6851f12bbf309a647311557189afd48b16
+  Token liabilities: $2161446182.114861
+  Gross reserves: $2485663109.432090
+  Eligible reserves: $2478996062.810477
+  Liquid assets: $43228923.642297
+  Merkle root: 0x46532b1aadf94caaa3c962dea17e2e68d1516d92f1eac50aa98bc43a7dd75437
 ```
 
 ### Unit tests
@@ -439,12 +436,12 @@ backing but queues the tested redemption because liquid assets cover only about
 
 | Operation | Gas used |
 |---|---:|
-| `submitSnapshot:valid` | 370,613 |
-| `baselineReport:valid` | 94,689 |
-| `submitSnapshot:encumbered-assets` | 203,276 |
-| `baselineReport:encumbered-assets` | 37,789 |
+| `submitSnapshot:valid` | 370,625 |
+| `baselineReport:valid` | 94,701 |
+| `submitSnapshot:encumbered-assets` | 203,288 |
+| `baselineReport:encumbered-assets` | 37,801 |
 | `submitSnapshot:liquidity-stress` | 206,076 |
-| `baselineReport:liquidity-stress` | 37,789 |
+| `baselineReport:liquidity-stress` | 37,801 |
 
 ## Real-data replay (v2)
 
@@ -461,10 +458,10 @@ deployed controller. Baseline results (`data/results/real-replay-summary.csv`):
 
 | | Aggregate PoR | RWA-PoB |
 |---|---:|---:|
-| Mints accepted (of 348 subscription days) | 348 | 330 |
-| Mints accepted, 4% encumbered | 348 | 0 |
+| Mints accepted (of 343 subscription days) | 343 | 327 |
+| Mints accepted, 4% encumbered | 343 | 0 |
 | Unsafe mints (post-mint BCR < 101%) | not checked | 0 |
-| Unsafe mints under v1 settlement logic, 4% encumbered | | 43 (USD 9.59 m) |
+| Unsafe mints under v1 settlement logic, 4% encumbered | | 43 (USD 9.60 m) |
 
 All configurations and the model assumptions are in
 [`CHANGELOG.md`](CHANGELOG.md). Without the `RWA_POB_REAL_REPLAY=1` flag

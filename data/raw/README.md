@@ -7,9 +7,12 @@ repository.
 
 To reproduce the processed USDY dataset:
 
-1. Download the Treasury market-cap CSV from RWA.xyz.
-2. Save it as `data/raw/rwa-xyz-treasury-market-caps.csv`.
-3. Run `npm run prepare:usdy`.
+1. Download the USDY market-cap CSV ("Bridged Token Value (Dollar)", one
+   column per chain) from RWA.xyz.
+2. Run `node scripts/prepare-usdy-data.mjs <file.csv> --until 2026-07-26`.
+
+The committed series comes from the export downloaded on 2026-11-01 (sum of
+12 chains).
 
 The processed observations are written to `data/input/`.
 
