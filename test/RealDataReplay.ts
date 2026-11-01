@@ -32,9 +32,9 @@ import assert from "node:assert/strict";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { describe, it } from "node:test";
 import hre from "hardhat";
-import { keccak256, toBytes, type Hex } from "viem";
+import { keccak256, parseUnits, toBytes, type Hex } from "viem";
 
-import { POLICY_HASH, WAD, signSnapshot, signSnapshotV1, signSubscriptionReceipt } from "./helpers.js";
+import { POLICY_HASH, WAD, liabilityOf, signFullSnapshot, signSnapshot, signSubscriptionReceipt } from "./helpers.js";
 
 const { viem, networkHelpers } = await hre.network.create();
 
@@ -44,17 +44,20 @@ const RESERVE_ROOT = keccak256(toBytes("real-data replay reserve ladder"));
 
 // ---------------------------------------------------------------- data ----
 
-type Obs = { date: string; value: number };
+type Obs = { date: string; value: number; nav: number; navWad: bigint; supply: number };
 
+/** Observed token value, issuer NAV, and supply = value / NAV (RWA.xyz). */
 async function loadLiabilities(): Promise<Obs[]> {
-  const text = await readFile("data/input/usdy-observed-token-value.csv", "utf8");
+  const text = await readFile("data/input/usdy-observed-supply.csv", "utf8");
   const [header, ...lines] = text.trim().split("\n");
   const cols = header.split(",");
   const iDate = cols.indexOf("date");
   const iVal = cols.indexOf("observed_token_value_usd");
+  const iNav = cols.indexOf("nav_usd");
+  const iSup = cols.indexOf("observed_token_supply");
   return lines.map((line) => {
     const c = line.split(",");
-    return { date: c[iDate], value: Number(c[iVal]) };
+    return { date: c[iDate], value: Number(c[iVal]), nav: Number(c[iNav]), navWad: parseUnits(c[iNav], 18), supply: Number(c[iSup]) };
   });
 }
 
@@ -199,6 +202,31 @@ function deriveFlowsTbill(obs: Obs[], curves: Map<string, Curve>, cleaned: boole
   return { accrual, flow, netted: 0 };
 }
 
+/**
+ * Observed net supply change (review P1): supply = value / NAV is observed,
+ * so the daily net flow needs no accrual estimate. Returned as a fraction of
+ * the previous day's supply; changes under one token are float noise.
+ * The cleaned variant nets one-day round trips as in deriveFlows.
+ */
+function deriveSupplyFlows(obs: Obs[], cleaned: boolean) {
+  const flow = obs.map((o, i) => (i === 0 ? 0 : o.supply - obs[i - 1].supply));
+  for (let i = 1; i < obs.length; i++) if (Math.abs(flow[i]) <= 1) flow[i] = 0;
+  let netted = 0;
+  if (cleaned) {
+    for (let i = 1; i + 1 < obs.length; i++) {
+      const a = flow[i];
+      const b = flow[i + 1];
+      if (Math.abs(a) > 0.05 * obs[i - 1].supply && Math.sign(a) !== Math.sign(b) && Math.abs(a + b) <= 0.02 * Math.abs(a)) {
+        flow[i] = 0;
+        flow[i + 1] = 0;
+        netted += 1;
+        i += 1;
+      }
+    }
+  }
+  return { frac: obs.map((o, i) => (i === 0 ? 0 : flow[i] / obs[i - 1].supply)), netted };
+}
+
 // --------------------------------------------------------------- model ----
 
 type Config = {
@@ -224,6 +252,11 @@ type Config = {
   persistent: boolean; // one controller for the whole run (unit price, no liability accrual)
   accrualWindow: number; // trailing window (days) for the accrual median
   accrualSource: "series" | "tbill"; // tbill: accrual = 4-week bill rate minus 0.50%/yr
+  // "inferred": value change minus estimated accrual, unit price.
+  // "supply": observed supply change; liabilities = units x issuer NAV, and the
+  // snapshot carries NAV as the authenticated redemption price (v2.2). Requires
+  // a persistent controller.
+  flowSource: "inferred" | "supply";
 };
 
 const BASE: Config = {
@@ -248,6 +281,7 @@ const BASE: Config = {
   persistent: false,
   accrualWindow: 31,
   accrualSource: "series",
+  flowSource: "inferred",
 };
 
 /**
@@ -262,6 +296,20 @@ const ONDO_MIX: Partial<Config> = {
   ladderDays: 364,
   etfShareBps: 1400,
 };
+
+const SUPPLY_BASE: Config = { ...BASE, name: "supply-baseline", flowSource: "supply", persistent: true };
+const SUPPLY_CONFIGS: Config[] = [
+  { ...SUPPLY_BASE },
+  ...[100, 200, 300, 400].map((b) => ({ ...SUPPLY_BASE, name: `supply-encumbered-${b / 100}pct`, encumberedBps: b })),
+  { ...SUPPLY_BASE, name: "supply-buffer-1.5pct", bufferBps: 150 },
+  { ...SUPPLY_BASE, name: "supply-snapshot-daily", snapshotEveryDays: 1 },
+  { ...SUPPLY_BASE, name: "supply-cleaned-series", cleaned: true },
+  { ...SUPPLY_BASE, ...ONDO_MIX, name: "supply-ondo-mix" },
+  { ...SUPPLY_BASE, name: "supply-ablation-A1-bcr-only", attestation: "single", mintRule: "no-receipt", liquidityPolicy: false },
+  { ...SUPPLY_BASE, name: "supply-ablation-A2-bcr-rlc", attestation: "single", mintRule: "no-receipt" },
+  { ...SUPPLY_BASE, name: "supply-ablation-A3-bcr-rlc-receipts", attestation: "single" },
+  { ...SUPPLY_BASE, name: "supply-ablation-A1-encumbered-4pct", attestation: "single", mintRule: "no-receipt", liquidityPolicy: false, encumberedBps: 400 },
+];
 
 const toWad = (usdValue: number) =>
   BigInt(Math.round(Math.max(0, usdValue) * 1e6)) * 10n ** 12n;
@@ -278,15 +326,22 @@ async function runReplay(cfg: Config, obs: Obs[], curves: Map<string, Curve>) {
   const client = await viem.getPublicClient();
   const chainId = await client.getChainId();
 
-  const { flow, accrual, netted } =
+  const SUPPLY = cfg.flowSource === "supply";
+  if (SUPPLY) assert.ok(cfg.persistent, "supply mode runs on a persistent controller");
+  const inferred =
     cfg.accrualSource === "tbill"
       ? deriveFlowsTbill(obs, curves, cfg.cleaned)
       : deriveFlows(obs, cfg.cleaned, cfg.accrualWindow);
+  const supplyFlows = deriveSupplyFlows(obs, cfg.cleaned);
+  const { flow, accrual } = inferred;
+  const netted = SUPPLY ? supplyFlows.netted : inferred.netted;
   const horizon = FULL ? obs.length : Math.min(70, obs.length);
 
   // Initial portfolio: cash target + ETF sleeve + equal-weight bill ladder.
   const L0 = obs[0].value;
-  let tokens = L0;
+  let tokens = L0; // token liabilities in USD
+  let units = SUPPLY ? obs[0].supply : L0; // token units (supply mode)
+  let snapPrice = 1; // redemption price in the latest snapshot
   let cash = (cfg.cashTargetBps / 10_000) * L0;
   let etf = (cfg.etfShareBps / 10_000) * L0 * (1 + cfg.bufferBps / 10_000);
   const etfHaircut = ((cfg.rateShockBps / 10_000) * cfg.etfDurationDays) / 360;
@@ -346,6 +401,8 @@ async function runReplay(cfg: Config, obs: Obs[], curves: Map<string, Curve>) {
     maxQueueAgeDays: 0,
     redemptionsCapped: 0,
     liabilityConservationViolations: 0,
+    priceLagUnsafeMints: 0,
+    maxPriceLagBcrPp: 0,
   };
   const daily: string[] = [];
 
@@ -385,7 +442,8 @@ async function runReplay(cfg: Config, obs: Obs[], curves: Map<string, Curve>) {
       // Unit redemption price: in the persistent run the token liability
       // does not accrue (the contract has no redemption-price update), so
       // the reserve yield stays with the issuer and is swept.
-      if (!cfg.persistent) tokens *= 1 + accrual[day];
+      if (SUPPLY) tokens = units * obs[day].nav; // liabilities follow the issuer NAV
+      else if (!cfg.persistent) tokens *= 1 + accrual[day];
       // ETF sleeve accrues at the 4-week bill rate (money-market-like).
       etf *= 1 + discountRate(curveForDate(curves, obs[day].date), 28) / 360;
       for (const c of claims) void c; // pending claims do not accrue
@@ -462,6 +520,8 @@ async function runReplay(cfg: Config, obs: Obs[], curves: Map<string, Curve>) {
       const { gross, eligible, liquid } = liquidAndValues(day);
       const carried = pendingTotal();
       const now = (await client.getBlock()).timestamp;
+      const priceWad = SUPPLY ? obs[day].navWad : WAD;
+      const supplyWad: bigint = SUPPLY ? (reuse ? await controller.read.tokenUnits() : toWad(units)) : 0n;
       const snapshot = {
         epoch: BigInt(day + 1),
         asOfTimestamp: now,
@@ -476,11 +536,21 @@ async function runReplay(cfg: Config, obs: Obs[], curves: Map<string, Curve>) {
           : toWad(tokens) + claims.reduce((s, c) => s + toWad(c.amount), 0n),
         pendingRedemptions: reuse ? await controller.read.currentPendingRedemptions() : 0n,
         otherLiabilities: 0n,
+        tokenSupply: 0n,
+        redemptionPrice: WAD,
       };
-      if (reuse) tokens = fromWad(snapshot.tokenLiabilities); // stay on the on-chain ledger
+      snapshot.tokenSupply = snapshot.tokenLiabilities;
+      if (SUPPLY) {
+        snapshot.tokenSupply = supplyWad;
+        snapshot.redemptionPrice = priceWad;
+        snapshot.tokenLiabilities = liabilityOf(supplyWad, priceWad);
+        units = fromWad(supplyWad); // stay on the on-chain unit ledger
+        tokens = units * obs[day].nav;
+        snapPrice = obs[day].nav;
+      } else if (reuse) tokens = fromWad(snapshot.tokenLiabilities); // stay on the on-chain ledger
       const signatures =
         cfg.attestation === "single"
-          ? await signSnapshotV1([verifier], chainId, controller.address, snapshot)
+          ? await signFullSnapshot(verifier, chainId, controller.address, snapshot)
           : await signSnapshot(signers, chainId, controller.address, snapshot);
       const hash = await controller.write.submitSnapshot([snapshot, signatures], {
         account: admin.account,
@@ -554,7 +624,10 @@ async function runReplay(cfg: Config, obs: Obs[], curves: Map<string, Curve>) {
     // (e) the day's real net flow
     // Observed net flow as a fraction of the previous outstanding value,
     // applied to the modelled supply.
-    const f = day === 0 ? 0 : (flow[day] / obs[day - 1].value) * tokens;
+    // Supply mode: observed net supply change (fraction of yesterday's supply)
+    // applied to the modelled units, valued at today's NAV.
+    const fu = SUPPLY ? (day === 0 ? 0 : supplyFlows.frac[day] * units) : 0;
+    const f = SUPPLY ? fu * obs[day].nav : day === 0 ? 0 : (flow[day] / obs[day - 1].value) * tokens;
     if (f > 0) {
       m.subscriptionDays += 1;
       m.subscriptionUsd += f;
@@ -564,7 +637,7 @@ async function runReplay(cfg: Config, obs: Obs[], curves: Map<string, Curve>) {
       const porOk =
         gross + f * (1 + cfg.bufferBps / 10_000) >= tokens + pendingTotal() + f;
       if (porOk) m.porAccepted += 1;
-      const amount = toWad(f);
+      const amount = SUPPLY ? toWad(fu) : toWad(f);
       // v1 shadow: same on-chain state, settlement cash not deducted.
       const credited = fromWad(await controller.read.creditedSubscriptionCash());
       const consumed = fromWad(await controller.read.liquidAssetsConsumed());
@@ -574,8 +647,9 @@ async function runReplay(cfg: Config, obs: Obs[], curves: Map<string, Curve>) {
       // custodian receipt covers subscription cash plus top-up.
       const topUp = (cfg.bufferBps / 10_000) * f;
       const received = toWad(f + topUp);
-      const v1After = (snapshotEligible + credited + f + topUp) / (liabNow + f);
-      const trueAfter = (snapshotEligible + credited - consumed + f + topUp) / (liabNow + f);
+      const mintLiab = SUPPLY ? fromWad(await controller.read.mintLiabilityOf([amount])) : f;
+      const v1After = (snapshotEligible + credited + f + topUp) / (liabNow + mintLiab);
+      const trueAfter = (snapshotEligible + credited - consumed + f + topUp) / (liabNow + mintLiab);
       const ok: boolean =
         cfg.mintRule === "receipt"
           ? await controller.read.canMintWithReceipt([amount, received])
@@ -620,6 +694,16 @@ async function runReplay(cfg: Config, obs: Obs[], curves: Map<string, Curve>) {
           m.unsafeMints += 1;
           m.unsafeMintUsd += f;
         }
+        if (SUPPLY) {
+          // The controller prices liabilities at the snapshot NAV; the issuer
+          // NAV has accrued since. Post-mint BCR at today's NAV:
+          const onElig = fromWad(await controller.read.currentEligibleReserves());
+          const onPend = fromWad(await controller.read.currentPendingRedemptions());
+          const atNav = onElig / (onPend + (units + fu) * obs[day].nav);
+          m.maxPriceLagBcrPp = Math.max(m.maxPriceLagBcrPp, (v2Bcr - atNav) * 100);
+          if (atNav < cfg.thetaS) m.priceLagUnsafeMints += 1;
+          units += fu;
+        }
         tokens += f;
         cash += f + topUp;
         m.issuerTopUpUsd += topUp;
@@ -633,24 +717,30 @@ async function runReplay(cfg: Config, obs: Obs[], curves: Map<string, Curve>) {
       // A redemption cannot exceed outstanding tokens. On-chain token
       // liabilities omit intra-interval accrual, so cap at the on-chain value.
       const onchainTokens = fromWad(await controller.read.currentTokenLiabilities());
-      const r = Math.min(-f, tokens, onchainTokens);
-      if (r < -f - 0.01) m.redemptionsCapped += 1;
+      const onchainUnits = SUPPLY ? fromWad(await controller.read.tokenUnits()) : onchainTokens;
+      const ru = SUPPLY ? Math.min(-fu, units, onchainUnits) : 0;
+      let r = SUPPLY ? ru * snapPrice : Math.min(-f, tokens, onchainTokens);
+      if (SUPPLY ? ru < -fu - 0.01 : r < -f - 0.01) m.redemptionsCapped += 1;
       if (r > 0.01) {
         m.redemptionRequests += 1;
-        m.redemptionUsd += r;
         const hash = await controller.write.requestRedemption(
-          [holder.account.address, toWad(r)],
+          [holder.account.address, SUPPLY ? toWad(ru) : toWad(r)],
           { account: admin.account },
         );
         gas.requestRedemption.push((await client.getTransactionReceipt({ hash })).gasUsed);
         const id = (await controller.read.nextRedemptionId()) - 1n;
         const rec = await controller.read.redemptions([id]);
         const queued = Number(rec[3]) === 1;
+        if (SUPPLY) r = fromWad(rec[1]); // claim fixed at the snapshot price
+        m.redemptionUsd += r;
         if (queued) {
           m.queued += 1;
           m.queuedUsd += r;
         } else m.instant += 1;
-        tokens -= r;
+        if (SUPPLY) {
+          units -= ru;
+          tokens = units * obs[day].nav;
+        } else tokens -= r;
         claims.push({
           amount: r,
           id,
@@ -687,7 +777,7 @@ async function runReplay(cfg: Config, obs: Obs[], curves: Map<string, Curve>) {
       // Liability conservation on the persistent controller: on-chain total
       // liabilities equal the off-chain ledger (tokens + open claims).
       const onTotal = fromWad(await controller.read.currentTotalLiabilities());
-      const ledger = tokens + pendingTotal();
+      const ledger = (SUPPLY ? units * snapPrice : tokens) + pendingTotal();
       if (Math.abs(onTotal - ledger) > 1 + 1e-6 * ledger) m.liabilityConservationViolations += 1;
     }
     const { gross, eligible, liquid } = liquidAndValues(day);
@@ -768,12 +858,16 @@ describe(`Real-data replay (${FULL ? "full 1,043 days" : "70-day smoke run"})`, 
           { ...BASE, name: "persistent-encumbered-4pct", persistent: true, encumberedBps: 400 },
           // Valuation haircut under a 200 bp instead of 100 bp rate shock.
           { ...BASE, name: "haircut-200bp", rateShockBps: 200 },
+          // v2.2: observed supply changes and issuer NAV as the authenticated
+          // redemption price, on one persistent controller.
+          ...SUPPLY_CONFIGS,
         ]
       : [
           { ...BASE },
           { ...BASE, name: "encumbered-4pct", encumberedBps: 400 },
           { ...BASE, name: "ablation-A1-bcr-only", attestation: "single", mintRule: "no-receipt", liquidityPolicy: false },
           { ...BASE, name: "persistent", persistent: true },
+          { ...SUPPLY_BASE },
         ];
 
     // RWA_POB_CONFIGS=name1,name2 runs only those configurations and writes
@@ -845,11 +939,22 @@ describe(`Real-data replay (${FULL ? "full 1,043 days" : "70-day smoke run"})`, 
           cfg.persistent,
           cfg.accrualSource === "tbill" ? "tbill" : cfg.accrualWindow,
           m.liabilityConservationViolations,
+          cfg.flowSource,
+          m.priceLagUnsafeMints,
+          m.maxPriceLagBcrPp.toFixed(3),
         ].join(","),
       );
       gasRows.push(
         [cfg.name, r.gas.submitSnapshot, r.gas.authorizeMintWithReceipt, r.gas.requestRedemption, r.gas.confirmSettlement].join(","),
       );
+      if (FULL && cfg.name === "supply-baseline" && !only) {
+        await writeFile(
+          "data/results/real-replay-daily-supply.csv",
+          "date,observed_value_usd,model_token_liabilities_usd,pending_usd,gross_usd,eligible_usd,liquid_usd,onchain_bcr_pct,onchain_rlc_pct,net_flow_usd,bill_13w_discount_pct\n" +
+            r.daily.join("\n") +
+            "\n",
+        );
+      }
       if (FULL && cfg.name === "baseline" && !only) {
         await mkdir("data/results", { recursive: true });
         await writeFile(
@@ -865,7 +970,7 @@ describe(`Real-data replay (${FULL ? "full 1,043 days" : "70-day smoke run"})`, 
       "config,days,snapshots,buffer_pct,theta_s_pct,settlement_delay_days,snapshot_every_days,encumbered_pct,cleaned,round_trips_netted," +
       "subscription_days,por_mint_accepted,pob_mint_accepted,pob_mint_rejected,pob_rejected_usd_m,por_accept_pob_reject," +
       "redemption_requests,redemption_usd_m,instant,queued,queued_usd_m,settlement_days_deferred,max_claim_age_days,bill_sales_for_settlement_usd_m," +
-      "min_bcr_pct,max_bcr_pct,days_bcr_below_threshold,min_rlc_pct,days_with_pending,days_rlc_below_threshold,days_onchain_liquid_above_actual,days_onchain_eligible_above_actual,unsafe_mints,unsafe_mint_usd_m,rejected_bcr,rejected_rlc,issuer_topup_usd_m,swept_usd_m,v1_accept_v2_reject,v1_unsafe_mints,v1_unsafe_mint_usd_m,max_v1_bcr_overstatement_pp,redemptions_capped,attestation,mint_rule,liquidity_policy,persistent,accrual,liability_conservation_violations";
+      "min_bcr_pct,max_bcr_pct,days_bcr_below_threshold,min_rlc_pct,days_with_pending,days_rlc_below_threshold,days_onchain_liquid_above_actual,days_onchain_eligible_above_actual,unsafe_mints,unsafe_mint_usd_m,rejected_bcr,rejected_rlc,issuer_topup_usd_m,swept_usd_m,v1_accept_v2_reject,v1_unsafe_mints,v1_unsafe_mint_usd_m,max_v1_bcr_overstatement_pp,redemptions_capped,attestation,mint_rule,liquidity_policy,persistent,accrual,liability_conservation_violations,flow_source,price_lag_unsafe_mints,max_price_lag_bcr_pp";
     const suffix = only ? "-subset" : "";
     const out = FULL ? `data/results/real-replay-summary${suffix}.csv` : `data/results/real-replay-smoke${suffix}.csv`;
     await mkdir("data/results", { recursive: true });

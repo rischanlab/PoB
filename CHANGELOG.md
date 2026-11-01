@@ -11,6 +11,42 @@ manuscript v3.0 mirrors this release.
 
 ### Added
 
+- **Authenticated variable redemption price** in `PoBPolicyController`.
+  `Snapshot` and the administrator's `LiabilityClaim` gain `tokenSupply` and
+  `redemptionPrice` (18 decimals; both in the EIP-712 typehashes). A snapshot
+  is rejected unless `redemptionPrice > 0` and
+  `tokenLiabilities == ceil(tokenSupply * redemptionPrice / 1e18)`. The
+  controller keeps `tokenUnits`; continuity requires
+  `snapshot.tokenSupply == tokenUnits`. All mint and redemption arguments are
+  token units: `mintLiabilityOf(u) = ceil((U+u)P) - ceil(UP)`,
+  `redemptionClaimOf(u) = floor(uP)` fixed at request (zero claims revert),
+  `currentTokenLiabilities() = ceil(tokenUnits * P)`. New views
+  `currentRedemptionPrice`, `liabilityOfUnits`, `mintLiabilityOf`,
+  `redemptionClaimOf`. At `P = 1` behaviour is unchanged.
+- `test/VariablePrice.ts` (4 tests, `npm run test:price`): mispriced and
+  zero-price snapshots rejected; mints and claims across prices 1.05, 1.10,
+  1.08 with partial settlement and an independent ledger
+  (`data/results/variable-price-ledger.csv`); rounding at `P = 1 + 1e-18`;
+  token coupling at `P = 1.0712`.
+- `scripts/prepare-usdy-supply.mjs` (`npm run prepare:usdy-supply`):
+  bridged supply = RWA.xyz token value / NAV of the same day, written to
+  `data/input/usdy-observed-supply.csv` (1,043 days; raw NAV export not
+  redistributed).
+- Replay **supply mode** (13 configurations `supply-*`, persistent
+  controller): flows are observed daily net supply changes (|dS| <= 1 token
+  treated as zero), minted and redeemed in token units; each snapshot attests
+  the controller's units and that day's NAV. New summary columns
+  `flow_source`, `price_lag_unsafe_mints`, `max_price_lag_bcr_pp`; daily
+  output `real-replay-daily-supply.csv`; figure
+  `figures/real-replay-supply.pdf` (`plot-real-replay.py OUT CSV`).
+- Four more FOBXX N-MFP3 filings (31 May, 30 Jun, 31 Jul, 31 Aug 2026) in
+  `data/raw/franklin/`, built into `data/input/franklin-fobxx-monthly/`
+  (`npm run build:franklin-monthly`, `npm run reconcile:franklin-monthly`,
+  also in CI).
+- `test/FobxxMonthly.ts` (`npm run experiment:fobxx-monthly`): the five month
+  ends as five epochs of one controller, with each following month's
+  disclosed daily flows booked in between; every leaf verified and every
+  month reconciled (`data/results/fobxx-monthly.csv`).
 - `contracts/test/AblationController.sol` (test only): same accounting as the
   controller, with an optional single attestor (one verifier signature over
   the full snapshot) and an optional switch-off of the liquidity policy.
@@ -33,7 +69,7 @@ manuscript v3.0 mirrors this release.
 - `test/TrustModel.ts`: executed cases T1-T6 (absent signer, compromised key
   role-scoped vs single attestor, compromised governance, collusion, role
   reassignment, expiry) (`npm run experiment:trust`).
-- Replay configurations (26 in total): ablation A1-A3 and A1 under 4%
+- Inferred-flow replay configurations (26): ablation A1-A3 and A1 under 4%
   encumbrance; encumbrance sweep 1, 2, 2.5, 3, 3.5%; accrual 7-day, 91-day,
   and T-bill-based; persistent and persistent-encumbered; 200 bp haircut.
   Summary CSV gained `attestation`, `mint_rule`, `liquidity_policy`,
@@ -49,12 +85,31 @@ manuscript v3.0 mirrors this release.
 - Docs: README, REPRODUCIBILITY (environment, command-to-table map, test
   inventory, dataset vintages), data READMEs (evidence types).
 - Plot legend: "Observed USDY token value, RWA.xyz (proxy liability)".
+- `prepare-franklin-nmfp3.py` takes `[HOLDINGS.txt|-] [OUTDIR]`; the liquid
+  assets of a weekend report date are those of the last business day.
+  `build-franklin-snapshot.mjs` takes a directory argument.
+- Gas rises with the two new snapshot fields and `tokenUnits`: first
+  `submitSnapshot` 438,717 (was 370,637), later updates 211,387 / 214,175
+  (were 203,288 / 206,088), atomic issue 146,999 (was 137,083); the atomic
+  saving is unchanged at 20,411 gas (now 12.19%).
+- Corrected: September 2026 FOBXX redemptions are USD 42.07 m (the
+  manuscript said 42.05).
 
 ### Results (all from `data/results/`)
 
-- 62 tests pass (Hardhat prints 63 including `test/helpers.ts`).
-- Replay: 0 unsafe mints in all 26 runs; 0 conservation violations in
-  persistent mode. Baseline 327 of 343 inferred inflows; persistent 327.
+- 67 tests pass (Hardhat prints 68 including `test/helpers.ts`).
+- Replay: 0 unsafe mints (at the attested price) in all 39 runs; 0
+  conservation violations in every persistent run. The 26 inferred-flow
+  results are unchanged by the variable-price change.
+- Supply mode: 504 supply-increase and 309 decrease days (inferred mode:
+  343 / 232; only 61% of inferred inflow days are supply increases).
+  Baseline 474 of 504 minted (30 liquidity rejections), 15 queued, BCR
+  102.56-103.91%. Encumbrance 1/2/3/4%: 474/48/5/0. Ablation A1 450, A2 322,
+  A3 474 = full. Price lag: post-mint BCR at the day's NAV at most 0.089 pp
+  below the controller's figure; 1 mint below 101% on that basis in each of
+  `supply-buffer-1.5pct` and `supply-ablation-A1-bcr-only`, 0 elsewhere; 0
+  with daily snapshots.
+- Baseline 327 of 343 inferred inflows; persistent 327.
 - Ablation: A1 289 (54 BCR rejections, all 232 redemptions instant, longest
   claim 61 days), A2 214, A3 327 = full. A1 also accepts 0 under 4%
   encumbrance, so eligibility accounting alone causes that result.
@@ -66,12 +121,17 @@ manuscript v3.0 mirrors this release.
   USD 100 m receipt mint moves BCR only 99.68 -> 99.72%; daily flows 21/21
   accepted at 99.5%, 0/21 at 100%; closing liabilities equal the filed
   USD 667.97 m.
+- FOBXX five months: 77/83/83/84/85 leaves all verified and reconciled;
+  12-28 securities added and 12-22 removed per month; BCR 99.68-99.77%;
+  85/85 subscription days accepted at 99.5%; filed share changes differ from
+  filed flows by USD -71.30, +24.96, +20.32, +23.21, each rejected by the
+  continuity check and booked as an explicit adjustment.
 
 ### Not implemented
 
-- Variable redemption price (`P_red != 1`).
+- Accrual-aware redemption price between snapshots (staleness is measured,
+  not prevented).
 - On-chain aggregate (sum) reconciliation; liquidity-class challenge.
-- Several monthly N-MFP3 filings (only 30 Sep 2026 available).
 
 ## [2.1.0] - 2026-11-01 - Real reserve positions
 

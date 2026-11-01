@@ -8,7 +8,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { StandardMerkleTree } from "@openzeppelin/merkle-tree";
 
-const DIR = "data/input/franklin-fobxx";
+const DIR = process.argv[2] ?? "data/input/franklin-fobxx";
 const DECIMALS = 18n; // same unit as the controller tests (usd() = 18 decimals)
 const BPS = 10_000n;
 
@@ -63,7 +63,7 @@ const positions = holdings.map((h) => {
   // Liquid within the 7-day horizon = the fund's weekly-liquid-asset flag.
   const liquid = h.weekly_liquid === "Y" ? eligible : 0n;
   return {
-    positionId: `FOBXX-2026-09-30-${h.line.padStart(3, "0")}`,
+    positionId: `FOBXX-${fund.reportDate}-${h.line.padStart(3, "0")}`,
     instrumentId: h.identifier,
     faceValue: face,
     marketValue: market,

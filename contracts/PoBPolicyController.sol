@@ -5,6 +5,7 @@ import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 /// @title RWA-PoB Policy Controller
 /// @notice Research prototype. Values use 18-decimal fixed-point USD units.
@@ -23,6 +24,15 @@ import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProo
 ///        contradicts the eligibility rules.
 ///      - Custodian-signed subscription receipts: a mint can count its own
 ///        confirmed subscription cash atomically (authorizeMintWithReceipt).
+///
+///      v2.2: authenticated redemption price. Each snapshot carries the token
+///      supply S and the redemption price P (18 decimals, attested by the
+///      administrator and the verifier), and the controller checks
+///      tokenLiabilities == ceil(S * P). Mints and redemptions are passed in
+///      token units and converted at the snapshot price: a mint adds the
+///      rounded-up liability increase, a redemption fixes a USD claim at the
+///      request-time price, rounded down. Token liabilities are recomputed
+///      from the controller's unit count, so they follow each new price.
 contract PoBPolicyController is AccessControl, EIP712 {
     uint256 public constant WAD = 1e18;
 
@@ -62,7 +72,7 @@ contract PoBPolicyController is AccessControl, EIP712 {
         "CustodyClaim(uint64 epoch,uint64 asOfTimestamp,uint64 validUntil,bytes32 policyHash,bytes32 reserveRoot,uint256 grossReserves)"
     );
     bytes32 public constant LIABILITY_CLAIM_TYPEHASH = keccak256(
-        "LiabilityClaim(uint64 epoch,uint64 asOfTimestamp,uint64 validUntil,bytes32 policyHash,bytes32 reserveRoot,uint256 tokenLiabilities,uint256 pendingRedemptions,uint256 otherLiabilities)"
+        "LiabilityClaim(uint64 epoch,uint64 asOfTimestamp,uint64 validUntil,bytes32 policyHash,bytes32 reserveRoot,uint256 tokenLiabilities,uint256 pendingRedemptions,uint256 otherLiabilities,uint256 tokenSupply,uint256 redemptionPrice)"
     );
     bytes32 public constant VALUATION_CLAIM_TYPEHASH = keccak256(
         "ValuationClaim(uint64 epoch,uint64 asOfTimestamp,uint64 validUntil,bytes32 policyHash,bytes32 reserveRoot,uint256 eligibleReserves,uint256 liquidAssets)"
@@ -75,7 +85,7 @@ contract PoBPolicyController is AccessControl, EIP712 {
     );
 
     bytes32 public constant SNAPSHOT_TYPEHASH = keccak256(
-        "Snapshot(uint64 epoch,uint64 asOfTimestamp,uint64 validUntil,bytes32 reserveRoot,bytes32 policyHash,uint256 grossReserves,uint256 eligibleReserves,uint256 liquidAssets,uint256 tokenLiabilities,uint256 pendingRedemptions,uint256 otherLiabilities)"
+        "Snapshot(uint64 epoch,uint64 asOfTimestamp,uint64 validUntil,bytes32 reserveRoot,bytes32 policyHash,uint256 grossReserves,uint256 eligibleReserves,uint256 liquidAssets,uint256 tokenLiabilities,uint256 pendingRedemptions,uint256 otherLiabilities,uint256 tokenSupply,uint256 redemptionPrice)"
     );
 
     enum RedemptionDisposition {
@@ -95,6 +105,10 @@ contract PoBPolicyController is AccessControl, EIP712 {
         uint256 tokenLiabilities;
         uint256 pendingRedemptions;
         uint256 otherLiabilities;
+        /// @notice Outstanding token units registered with the controller.
+        uint256 tokenSupply;
+        /// @notice Authenticated redemption price per token (18 decimals).
+        uint256 redemptionPrice;
     }
 
     /// @notice One reserve position as committed in the reserve Merkle tree
@@ -154,6 +168,9 @@ contract PoBPolicyController is AccessControl, EIP712 {
     ///         gross, eligible, and liquid reserves until the next snapshot.
     uint256 public creditedSubscriptionCash;
     mapping(bytes32 => bool) public usedSubscriptionReceipts;
+
+    /// @notice Outstanding token units (persists across snapshots).
+    uint256 public tokenUnits;
 
     uint256 public nextRedemptionId = 1;
     mapping(uint256 => Redemption) public redemptions;
@@ -282,8 +299,10 @@ contract PoBPolicyController is AccessControl, EIP712 {
         _validateSnapshot(snapshot);
 
         if (_latestSnapshot.epoch != 0) {
+            // Units and fixed USD claims must carry over; the USD value of the
+            // token liabilities follows the new price (checked in validation).
             if (
-                snapshot.tokenLiabilities != currentTokenLiabilities() ||
+                snapshot.tokenSupply != tokenUnits ||
                 snapshot.pendingRedemptions != currentPendingRedemptions()
             ) {
                 revert LiabilityContinuityFailure();
@@ -297,6 +316,7 @@ contract PoBPolicyController is AccessControl, EIP712 {
         _verifyRoleScopedSignatures(snapshot, digest, signatures);
 
         _latestSnapshot = snapshot;
+        tokenUnits = snapshot.tokenSupply;
         latestSnapshotDigest = digest;
         usedSnapshotDigests[digest] = true;
         currentSnapshotRevoked = false;
@@ -341,11 +361,35 @@ contract PoBPolicyController is AccessControl, EIP712 {
             maximumSnapshotAge;
     }
 
-    function currentTokenLiabilities() public view returns (uint256) {
+    /// @notice Current redemption price (the latest snapshot's).
+    function currentRedemptionPrice() public view returns (uint256) {
+        return _latestSnapshot.redemptionPrice;
+    }
+
+    /// @notice USD liability of `units` tokens at the current price, rounded
+    ///         up so that recorded liabilities are never below the exact value.
+    function liabilityOfUnits(uint256 units) public view returns (uint256) {
         return
-            _latestSnapshot.tokenLiabilities +
-            additionalMintLiabilities -
-            tokenLiabilitiesMovedToPending;
+            Math.mulDiv(
+                units,
+                _latestSnapshot.redemptionPrice,
+                WAD,
+                Math.Rounding.Ceil
+            );
+    }
+
+    /// @notice Liability increase caused by minting `units` tokens.
+    function mintLiabilityOf(uint256 units) public view returns (uint256) {
+        return liabilityOfUnits(tokenUnits + units) - currentTokenLiabilities();
+    }
+
+    /// @notice USD claim fixed when `units` tokens are redeemed (rounded down).
+    function redemptionClaimOf(uint256 units) public view returns (uint256) {
+        return Math.mulDiv(units, _latestSnapshot.redemptionPrice, WAD);
+    }
+
+    function currentTokenLiabilities() public view returns (uint256) {
+        return liabilityOfUnits(tokenUnits);
     }
 
     function currentPendingRedemptions() public view returns (uint256) {
@@ -407,24 +451,26 @@ contract PoBPolicyController is AccessControl, EIP712 {
         return (currentLiquidAssets() * WAD) / pending;
     }
 
-    function bcrAfterMint(uint256 mintLiability)
+    /// @param mintUnits token units to be minted (converted at the current price)
+    function bcrAfterMint(uint256 mintUnits)
         public
         view
         returns (uint256)
     {
-        uint256 postMintLiabilities = currentTotalLiabilities() + mintLiability;
+        uint256 postMintLiabilities =
+            currentTotalLiabilities() + mintLiabilityOf(mintUnits);
         if (postMintLiabilities == 0) {
             return type(uint256).max;
         }
         return (currentEligibleReserves() * WAD) / postMintLiabilities;
     }
 
-    function canMint(uint256 mintLiability) public view virtual returns (bool) {
-        if (!isSnapshotFresh() || mintLiability == 0) {
+    function canMint(uint256 mintUnits) public view virtual returns (bool) {
+        if (!isSnapshotFresh() || mintUnits == 0) {
             return false;
         }
         return
-            bcrAfterMint(mintLiability) >= minimumBCR &&
+            bcrAfterMint(mintUnits) >= minimumBCR &&
             currentRLC() >= minimumRLC;
     }
 
@@ -432,16 +478,17 @@ contract PoBPolicyController is AccessControl, EIP712 {
     ///         receipt: `receivedCash` (the subscription plus any issuer
     ///         buffer top-up) is counted in eligible and liquid reserves
     ///         together with the new liability.
-    function canMintWithReceipt(uint256 mintLiability, uint256 receivedCash)
+    function canMintWithReceipt(uint256 mintUnits, uint256 receivedCash)
         public
         view
         virtual
         returns (bool)
     {
-        if (!isSnapshotFresh() || mintLiability == 0) {
+        if (!isSnapshotFresh() || mintUnits == 0) {
             return false;
         }
-        uint256 liabilities = currentTotalLiabilities() + mintLiability;
+        uint256 liabilities =
+            currentTotalLiabilities() + mintLiabilityOf(mintUnits);
         uint256 bcr = ((currentEligibleReserves() + receivedCash) * WAD) /
             liabilities;
         uint256 pending = currentPendingRedemptions();
@@ -458,14 +505,14 @@ contract PoBPolicyController is AccessControl, EIP712 {
     ///         check fails the whole call reverts, so no cash is credited for
     ///         a rejected mint (the subscriber is refunded off-chain).
     function authorizeMintWithReceipt(
-        uint256 mintLiability,
+        uint256 mintUnits,
         uint256 receivedCash,
         uint256 nonce,
         bytes calldata custodianSignature
     ) external onlyRole(TOKEN_ROLE) {
         if (
             _latestSnapshot.epoch == 0 ||
-            mintLiability == 0 ||
+            mintUnits == 0 ||
             receivedCash == 0
         ) {
             revert InvalidSubscriptionReceipt();
@@ -487,12 +534,14 @@ contract PoBPolicyController is AccessControl, EIP712 {
         if (!hasRole(CUSTODIAN_ROLE, signer)) {
             revert InvalidSubscriptionReceipt();
         }
-        if (!canMintWithReceipt(mintLiability, receivedCash)) {
+        if (!canMintWithReceipt(mintUnits, receivedCash)) {
             revert MintPolicyFailed();
         }
         usedSubscriptionReceipts[digest] = true;
         creditedSubscriptionCash += receivedCash;
+        uint256 mintLiability = mintLiabilityOf(mintUnits);
         additionalMintLiabilities += mintLiability;
+        tokenUnits += mintUnits;
         emit SubscriptionCashCredited(
             _latestSnapshot.epoch,
             receivedCash,
@@ -505,18 +554,21 @@ contract PoBPolicyController is AccessControl, EIP712 {
     /// @notice Records a mint authorization. Subscription cash counts toward
     ///         reserves only once it is in the latest snapshot or credited by a
     ///         custodian-signed receipt (authorizeMintWithReceipt).
-    function authorizeMint(uint256 mintLiability)
+    function authorizeMint(uint256 mintUnits)
         external
         onlyRole(TOKEN_ROLE)
     {
-        if (!canMint(mintLiability)) {
+        if (!canMint(mintUnits)) {
             revert MintPolicyFailed();
         }
+        uint256 mintLiability = mintLiabilityOf(mintUnits);
         additionalMintLiabilities += mintLiability;
+        tokenUnits += mintUnits;
         emit MintAuthorized(mintLiability, currentTotalLiabilities());
     }
 
-    function redemptionDisposition(uint256 redemptionValue)
+    /// @param redemptionUnits token units to be redeemed
+    function redemptionDisposition(uint256 redemptionUnits)
         public
         view
         virtual
@@ -525,7 +577,8 @@ contract PoBPolicyController is AccessControl, EIP712 {
         if (!isSnapshotFresh()) {
             return RedemptionDisposition.Queue;
         }
-        uint256 pendingAfter = currentPendingRedemptions() + redemptionValue;
+        uint256 pendingAfter =
+            currentPendingRedemptions() + redemptionClaimOf(redemptionUnits);
         if (pendingAfter == 0) {
             return RedemptionDisposition.Instant;
         }
@@ -536,21 +589,26 @@ contract PoBPolicyController is AccessControl, EIP712 {
         return RedemptionDisposition.Queue;
     }
 
-    function requestRedemption(address beneficiary, uint256 redemptionValue)
+    /// @param redemptionUnits token units burned; the USD claim is fixed at
+    ///        the current redemption price, rounded down.
+    function requestRedemption(address beneficiary, uint256 redemptionUnits)
         external
         onlyRole(TOKEN_ROLE)
         returns (uint256 redemptionId, RedemptionDisposition disposition)
     {
+        uint256 redemptionValue = redemptionClaimOf(redemptionUnits);
         if (
             beneficiary == address(0) ||
+            redemptionUnits == 0 ||
             redemptionValue == 0 ||
-            redemptionValue > currentTokenLiabilities()
+            redemptionUnits > tokenUnits
         ) {
             revert InvalidRedemptionAmount();
         }
 
-        disposition = redemptionDisposition(redemptionValue);
+        disposition = redemptionDisposition(redemptionUnits);
         tokenLiabilitiesMovedToPending += redemptionValue;
+        tokenUnits -= redemptionUnits;
 
         redemptionId = nextRedemptionId++;
         redemptions[redemptionId] = Redemption({
@@ -671,7 +729,7 @@ contract PoBPolicyController is AccessControl, EIP712 {
         return ChallengeReason.None;
     }
 
-    /// @notice Permissionless fraud proof. Anyone holding the published
+    /// @notice Permissionless position-level consistency challenge. Anyone holding the published
     ///         position file can show that a position committed under the
     ///         accepted root violates the eligibility rules. The snapshot is
     ///         then suspended: minting stops and redemptions are queued until
@@ -724,7 +782,15 @@ contract PoBPolicyController is AccessControl, EIP712 {
         if (
             snapshot.reserveRoot == bytes32(0) ||
             snapshot.eligibleReserves > snapshot.grossReserves ||
-            snapshot.liquidAssets > snapshot.eligibleReserves
+            snapshot.liquidAssets > snapshot.eligibleReserves ||
+            snapshot.redemptionPrice == 0 ||
+            snapshot.tokenLiabilities !=
+            Math.mulDiv(
+                snapshot.tokenSupply,
+                snapshot.redemptionPrice,
+                WAD,
+                Math.Rounding.Ceil
+            )
         ) {
             revert InvalidSnapshotValues();
         }
@@ -748,7 +814,9 @@ contract PoBPolicyController is AccessControl, EIP712 {
                 snapshot.liquidAssets,
                 snapshot.tokenLiabilities,
                 snapshot.pendingRedemptions,
-                snapshot.otherLiabilities
+                snapshot.otherLiabilities,
+                snapshot.tokenSupply,
+                snapshot.redemptionPrice
             )
         );
         return _hashTypedDataV4(structHash);
@@ -795,7 +863,9 @@ contract PoBPolicyController is AccessControl, EIP712 {
                     s.reserveRoot,
                     s.tokenLiabilities,
                     s.pendingRedemptions,
-                    s.otherLiabilities
+                    s.otherLiabilities,
+                    s.tokenSupply,
+                    s.redemptionPrice
                 )
             );
         } else if (roleIndex == VALUATION_INDEX) {

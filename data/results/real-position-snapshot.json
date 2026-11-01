@@ -2,7 +2,7 @@
   "reportDate": "2026-09-30",
   "merkleRoot": "0x8f8a056afb9827fa9711b33b5df17010fe9aec9c7a53e7a13fd6c882d56595c1",
   "positions": 85,
-  "submitSnapshotGas": "391404",
+  "submitSnapshotGas": "459484",
   "proofLength": "6-7",
   "verifiedPositions": 85,
   "inconsistentPositions": 0,

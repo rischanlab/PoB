@@ -19,7 +19,14 @@ export const snapshotTypes = {
     { name: "tokenLiabilities", type: "uint256" },
     { name: "pendingRedemptions", type: "uint256" },
     { name: "otherLiabilities", type: "uint256" },
+    { name: "tokenSupply", type: "uint256" },
+    { name: "redemptionPrice", type: "uint256" },
   ],
+} as const;
+
+/// v1 snapshot type (as submitted), used only by signSnapshotV1.
+export const snapshotTypesV1 = {
+  Snapshot: snapshotTypes.Snapshot.slice(0, 11),
 } as const;
 
 const claimHeader = [
@@ -48,9 +55,11 @@ export const roleClaimTypes = [
         { name: "tokenLiabilities", type: "uint256" },
         { name: "pendingRedemptions", type: "uint256" },
         { name: "otherLiabilities", type: "uint256" },
+        { name: "tokenSupply", type: "uint256" },
+        { name: "redemptionPrice", type: "uint256" },
       ],
     },
-    fields: ["tokenLiabilities", "pendingRedemptions", "otherLiabilities"],
+    fields: ["tokenLiabilities", "pendingRedemptions", "otherLiabilities", "tokenSupply", "redemptionPrice"],
   },
   {
     primaryType: "ValuationClaim",
@@ -99,13 +108,25 @@ export type Snapshot = {
   tokenLiabilities: bigint;
   pendingRedemptions: bigint;
   otherLiabilities: bigint;
+  tokenSupply: bigint;
+  redemptionPrice: bigint;
 };
+
+/// USD liability of `units` at `price` (18 decimals), rounded up as on-chain.
+export function liabilityOf(units: bigint, price: bigint): bigint {
+  return (units * price + WAD - 1n) / WAD;
+}
+
+/// Completes a unit-price snapshot: tokenSupply = tokenLiabilities, price 1.
+export function unitPrice<T extends Omit<Snapshot, "tokenSupply" | "redemptionPrice"> & Partial<Snapshot>>(s: T): Snapshot {
+  return { ...s, tokenSupply: s.tokenSupply ?? s.tokenLiabilities, redemptionPrice: s.redemptionPrice ?? WAD } as Snapshot;
+}
 
 export function makeSnapshot(
   now: bigint,
   overrides: Partial<Snapshot> = {},
 ): Snapshot {
-  return {
+  return unitPrice({
     epoch: 1n,
     asOfTimestamp: now,
     validUntil: now + 86_400n,
@@ -118,7 +139,7 @@ export function makeSnapshot(
     pendingRedemptions: 0n,
     otherLiabilities: usd("10000000"),
     ...overrides,
-  };
+  });
 }
 
 export async function signSnapshot(
@@ -166,7 +187,7 @@ export async function signSnapshotV1(
       (await wallet.signTypedData({
         account: wallet.account,
         domain,
-        types: snapshotTypes,
+        types: snapshotTypesV1,
         primaryType: "Snapshot",
         message: snapshot,
       })) as Hex,
@@ -194,4 +215,24 @@ export async function signSubscriptionReceipt(
     primaryType: "SubscriptionReceipt",
     message: receipt,
   })) as Hex;
+}
+
+/// One signature over the complete (v2) snapshot digest, as the verifier
+/// signs it. Used for the single-attestor ablation.
+export async function signFullSnapshot(
+  wallet: any,
+  chainId: number,
+  verifyingContract: Address,
+  snapshot: Snapshot,
+): Promise<Hex[]> {
+  const domain = { name: "RWA-PoB", version: "1", chainId, verifyingContract } as const;
+  return [
+    (await wallet.signTypedData({
+      account: wallet.account,
+      domain,
+      types: snapshotTypes,
+      primaryType: "Snapshot",
+      message: snapshot,
+    })) as Hex,
+  ];
 }

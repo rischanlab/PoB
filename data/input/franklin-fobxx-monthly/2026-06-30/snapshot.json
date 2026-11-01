@@ -1,0 +1,51 @@
+{
+  "source": "SEC EDGAR Form N-MFP3, primary_doc.xml",
+  "series": "Franklin OnChain U.S. Government Money Fund",
+  "seriesId": "S000067043",
+  "reportDate": "2026-06-30",
+  "unit": "USD with 18 decimals",
+  "positionCount": 83,
+  "merkleRoot": "0x687e29df706483dbc71e1c83eb68ea527d65cacd35b18388b4de827c39111518",
+  "haircutSchedule": [
+    {
+      "maxDays": 7,
+      "bps": 0
+    },
+    {
+      "maxDays": 90,
+      "bps": 10
+    },
+    {
+      "maxDays": 397,
+      "bps": 25
+    },
+    {
+      "maxDays": null,
+      "bps": 50
+    }
+  ],
+  "aggregates": {
+    "grossReserves": "771400963000000000000000000",
+    "eligibleReserves": "769282615332815000000000000",
+    "liquidAssets": "574886975557165000000000000",
+    "tokenLiabilities": "753246366550000000000000000",
+    "otherLiabilities": "18275866020000000000000000",
+    "stressPendingRedemptions": "83496035340000000000000000"
+  },
+  "usd": {
+    "grossReserves": "771400963.00",
+    "eligibleReserves": "769282615.33",
+    "liquidAssets": "574886975.55",
+    "tokenLiabilities": "753246366.55",
+    "otherLiabilities": "18275866.02",
+    "stressPendingRedemptions": "83496035.34",
+    "fundReportedWeeklyLiquidAssets": "575628371.95",
+    "fundReportedNetAssets": "753241527.25"
+  },
+  "ratiosPercent": {
+    "bcrAtMarketNoHaircut": 99.8708,
+    "bcrAfterHaircut": 99.7097,
+    "liquidShareOfTokenLiabilities": 76.3212,
+    "rlcUnderStressRedemptions": 688.52
+  }
+}

@@ -77,7 +77,7 @@ describe("Trust model: collusion, compromise, and liveness", function () {
     // The valuation agent withholds its signature for the next epoch.
     await networkHelpers.time.increase(3_600);
     const now = (await env.client.getBlock()).timestamp;
-    const s2 = { ...honest(now, 2n), tokenLiabilities: usd("94"), pendingRedemptions: usd("5") };
+    const s2 = { ...honest(now, 2n), tokenLiabilities: usd("94"), tokenSupply: usd("94"), pendingRedemptions: usd("5") };
     const sigs = await signSnapshot(env.signers, env.chainId, env.controller.address, s2);
     await assert.rejects(env.controller.write.submitSnapshot([s2, [sigs[0], sigs[1], sigs[3], sigs[4]]], { account: env.admin.account }), /InvalidSignatureCount/);
     // After the last snapshot expires: no minting, new redemptions queue,

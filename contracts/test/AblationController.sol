@@ -55,21 +55,21 @@ contract AblationController is PoBPolicyController {
         }
     }
 
-    function canMint(uint256 mintLiability) public view override returns (bool) {
-        if (liquidityPolicy) return super.canMint(mintLiability);
-        if (!isSnapshotFresh() || mintLiability == 0) return false;
-        return bcrAfterMint(mintLiability) >= minimumBCR;
+    function canMint(uint256 mintUnits) public view override returns (bool) {
+        if (liquidityPolicy) return super.canMint(mintUnits);
+        if (!isSnapshotFresh() || mintUnits == 0) return false;
+        return bcrAfterMint(mintUnits) >= minimumBCR;
     }
 
-    function canMintWithReceipt(uint256 mintLiability, uint256 receivedCash)
+    function canMintWithReceipt(uint256 mintUnits, uint256 receivedCash)
         public
         view
         override
         returns (bool)
     {
-        if (liquidityPolicy) return super.canMintWithReceipt(mintLiability, receivedCash);
-        if (!isSnapshotFresh() || mintLiability == 0) return false;
-        uint256 liabilities = currentTotalLiabilities() + mintLiability;
+        if (liquidityPolicy) return super.canMintWithReceipt(mintUnits, receivedCash);
+        if (!isSnapshotFresh() || mintUnits == 0) return false;
+        uint256 liabilities = currentTotalLiabilities() + mintLiabilityOf(mintUnits);
         return ((currentEligibleReserves() + receivedCash) * WAD) / liabilities >= minimumBCR;
     }
 

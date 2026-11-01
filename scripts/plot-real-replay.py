@@ -1,7 +1,11 @@
-"""Plot the baseline real-data replay (data/results/real-replay-daily-baseline.csv).
+"""Plot a daily real-data replay series.
 
-Usage: python3 scripts/plot-real-replay.py [OUT.pdf]
-Default output: figures/real-replay-baseline.pdf (used in the paper).
+Usage: python3 scripts/plot-real-replay.py [OUT.pdf] [DAILY.csv]
+Defaults: figures/real-replay-baseline.pdf from
+data/results/real-replay-daily-baseline.csv (inferred-flow baseline).
+The paper's primary figure is
+  python3 scripts/plot-real-replay.py figures/real-replay-supply.pdf data/results/real-replay-daily-supply.csv
+(observed supply and NAV, persistent controller).
 """
 import csv
 import datetime as dt
@@ -14,7 +18,9 @@ import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 
 out = sys.argv[1] if len(sys.argv) > 1 else "figures/real-replay-baseline.pdf"
-rows = list(csv.DictReader(open("data/results/real-replay-daily-baseline.csv")))
+src = sys.argv[2] if len(sys.argv) > 2 else "data/results/real-replay-daily-baseline.csv"
+rows = list(csv.DictReader(open(src)))
+supply = "supply" in src
 d = [dt.date.fromisoformat(r["date"]) for r in rows]
 obs = [float(r["observed_value_usd"]) / 1e9 for r in rows]
 mod = [float(r["model_token_liabilities_usd"]) / 1e9 for r in rows]
@@ -28,7 +34,7 @@ plt.rcParams.update({"font.size": 8, "axes.edgecolor": MUTED, "axes.labelcolor":
 fig, ax = plt.subplots(3, 1, figsize=(7.0, 5.2), sharex=True,
                        gridspec_kw={"height_ratios": [1.2, 1, 0.8]})
 ax[0].plot(d, obs, color=BLUE, lw=1.4, label="Observed USDY token value, RWA.xyz (proxy liability)")
-ax[0].plot(d, mod, color=ORANGE, lw=1.4, ls="--", label="Modelled token liabilities")
+ax[0].plot(d, mod, color=ORANGE, lw=1.4, ls="--", label="Controller token units x daily NAV" if supply else "Modelled token liabilities")
 ax[0].set_ylabel("USD billion")
 ax[0].legend(frameon=False, loc="upper left")
 ax[1].plot(d, [b if b is not None else float("nan") for b in bcr], color=BLUE, lw=1.2)

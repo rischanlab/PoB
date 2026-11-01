@@ -18,6 +18,7 @@ jobs:
       - run: npm run generate:data
       - run: npm run validate:treasury
       - run: npm run reconcile:franklin
+      - run: npm run reconcile:franklin-monthly
       - run: npm test
       - run: npm run experiment
       - run: npm run experiment:trust
