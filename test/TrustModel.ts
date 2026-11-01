@@ -16,8 +16,11 @@ import { writeFile } from "node:fs/promises";
 import { describe, it } from "node:test";
 import hre from "hardhat";
 import { keccak256, toBytes, type Hex } from "viem";
+import { StandardMerkleTree } from "@openzeppelin/merkle-tree";
 
 import { POLICY_HASH, WAD, makeSnapshot, signSnapshot, snapshotTypes, usd } from "./helpers.js";
+// @ts-ignore - plain ES module shared with the CLI
+import { reconcile } from "../scripts/reconcile-snapshot.mjs";
 
 const { viem, networkHelpers } = await hre.network.create();
 
@@ -176,8 +179,51 @@ describe("Trust model: collusion, compromise, and liveness", function () {
       "after expiry new requests are queued and minting stops; settlement of earlier claims continues within attested liquidity");
   });
 
+  it("T7 honest custodian, dishonest valuation agent and verifier: one honest signer is not enough", async function () {
+    // True state: gross 101 = an unencumbered bill (eligible 80, liquid 20)
+    // and a repurchase agreement pledged elsewhere (21, ineligible). The
+    // custodian and administrator sign correct figures; the valuation agent
+    // and the verifier approve eligible reserves of 100 instead of 80.
+    const TYPES = ["string", "string", "uint256", "uint256", "uint256", "uint256", "uint256", "uint256", "bool", "bool", "bool"];
+    const leaf = (id: string, mkt: string, elig: string, liq: string, enc: boolean) =>
+      [id, id, usd(mkt).toString(), usd(mkt).toString(), usd(elig).toString(), usd(liq).toString(), "30", "0", enc, true, true];
+    const honestFile = [leaf("BILL", "80", "80", "20", false), leaf("REPO", "21", "0", "0", true)];
+    const falseFile = [leaf("BILL", "80", "80", "20", false), leaf("REPO", "21", "20", "0", false)];
+    const toStruct = (p: any[]) => ({ positionId: p[0], instrumentId: p[1], faceValue: BigInt(p[2]), marketValue: BigInt(p[3]),
+      eligibleValue: BigInt(p[4]), liquidValue: BigInt(p[5]), maturityDays: BigInt(p[6]), haircutBps: BigInt(p[7]),
+      encumbered: p[8], legallyEligible: p[9], settlementFinal: p[10] });
+    const signedAgg = { grossReserves: usd("101"), eligibleReserves: usd("100"), liquidAssets: usd("20") };
+    for (const [label, file] of [["honest position file", honestFile], ["falsified position file", falseFile]] as const) {
+      const env = await deploy();
+      const tree = StandardMerkleTree.of(file as any[], TYPES);
+      const snap = { ...honest(env.now), reserveRoot: tree.root as Hex, ...signedAgg };
+      // Every role signs its own claim; the custodian's gross (101) is correct.
+      await env.controller.write.submitSnapshot([snap, await signSnapshot(env.signers, env.chainId, env.controller.address, snap)], { account: env.admin.account });
+      assert.equal(await env.controller.read.currentEligibleReserves(), usd("100"));
+      // Without the misstatement (eligible 80) a mint of 1 would fail at 100%.
+      assert.equal(await env.controller.read.canMint([usd("1")]), true);
+      const r = reconcile(file, Object.fromEntries(Object.entries(signedAgg).map(([k, v]) => [k, v.toString()])), undefined);
+      let challengeable = 0;
+      for (const [, l] of tree.entries()) if (Number(await env.controller.read.positionInconsistency([toStruct(l)]))) challengeable++;
+      if (label === "honest position file") {
+        assert.ok(r.findings.some((f: any) => f.field === "eligibleReserves"));
+        assert.equal(challengeable, 0);
+      } else {
+        assert.equal(r.findings.length, 0);
+        assert.equal(challengeable, 0);
+      }
+    }
+    // The honest custodian's gross figure still bounds the lie: eligible
+    // reserves above signed gross reserves are rejected.
+    const env = await deploy();
+    const over = { ...honest(env.now), grossReserves: usd("101"), eligibleReserves: usd("120"), liquidAssets: usd("20") };
+    await assert.rejects(env.controller.write.submitSnapshot([over, await signSnapshot(env.signers, env.chainId, env.controller.address, over)], { account: env.admin.account }), /InvalidSnapshotValues/);
+    record("T7", "Honest custodian; colluding valuation agent and verifier", "role-scoped", "not prevented on-chain; detected off-chain only if the position file is honest",
+      "eligible 100 instead of 80 accepted and a mint allowed; honest file: leaves-vs-signed mismatch (eligible 20); falsified file: reconciles and no leaf is challengeable; eligible above the custodian's gross (120 > 101) rejected");
+  });
+
   it("writes the trust-model table", async function () {
-    assert.equal(rows.length, 7);
+    assert.equal(rows.length, 8);
     const esc = (v: string) => (/[",]/.test(v) ? `"${v.replaceAll('"', '""')}"` : v);
     await writeFile("data/results/trust-model-results.csv",
       ["id,threat,setting,outcome,evidence", ...rows.map((r) => Object.values(r).map(esc).join(","))].join("\n") + "\n");

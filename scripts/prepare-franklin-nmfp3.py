@@ -129,6 +129,12 @@ fund = {
         {"date": text(d, "dailyNetAssetValuePerShareDateClass"),
          "nav": (d.find(NS + "dailyNetAssetValuePerShareClass").text or "").strip()}
         for d in cls.iter(NS + "dailyNetAssetValuePerShareClass") if d.find(NS + "dailyNetAssetValuePerShareClass") is not None],
+    # Seven-day net yield (series level), used only to estimate dividend
+    # reinvestment in a sensitivity run: the filing's gross subscriptions do
+    # not separate reinvested dividends from new cash.
+    "dailySevenDayNetYield": [
+        {"date": text(d, "sevenDayNetYieldDate"), "yield": text(d, "sevenDayNetYieldValue")}
+        for d in root.iter(NS + "sevenDayNetYield")],
     "derived": {
         "sumSecurityValues": f"{sec_total:.2f}",
         "sumDailyLiquidSecurities": f"{dla:.2f}",

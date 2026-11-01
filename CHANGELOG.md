@@ -4,6 +4,84 @@ All notable changes to the RWA-PoB prototype. The paper version for IET
 Blockchain (`rwa_pob_iet.tex`) mirrors this release: every number in the
 paper comes from the CSV files listed below.
 
+## [2.3.0] - 2026-11-01 - Final revision
+
+Response to the final revision brief (P0.1-P2.7). The IET Blockchain
+manuscript (final revision) mirrors this release; every number in it comes
+from the files in `data/results/`, produced by the commands in
+`REPRODUCIBILITY.md`. Release v2.2.0 is unchanged and does not contain the
+items below.
+
+### Added
+
+- **Price-risk policy** in `PoBPolicyController`: `maxPriceAccrualPerYear`
+  (18-decimal fraction, default 0), set by `setPriceRiskPolicy` (admin only,
+  event `PriceRiskPolicyUpdated`). `stressedRedemptionPrice()` returns
+  `ceil(P * (1 + ceil(g * elapsed / 365 days)))` and
+  `mintCheckLiabilities(u) = ceil((U+u) * P~) + pending + other`;
+  `bcrAfterMint`, `canMintWithReceipt` and the ablation controller use it.
+  Recorded liabilities, claims and continuity still use the attested `P`.
+  At `g = 0` behaviour is that of v2.2.0.
+- `VariablePrice.ts`: price-risk test (5 tests in the file).
+- Replay: four configurations `supply-baseline-pricerisk-8pct`,
+  `supply-buffer-1.5pct-pricerisk-8pct`, `supply-ablation-A1-pricerisk-8pct`,
+  `supply-buffer-1.5pct-pricerisk-5pct` (43 in total); summary columns
+  `price_risk_accrual_pct`, `rejected_price_risk`,
+  `min_post_mint_bcr_attested_pct`, `min_post_mint_bcr_at_nav_pct`.
+- `FobxxMonthly.ts` scenarios (`data/results/fobxx-monthly-scenarios.csv`):
+  modelled cash receipts T+0 (base), estimated dividend reinvestment minted
+  without a receipt, T+1 settlement, and a synthetic USD 1 m discrepancy.
+  Continuity adjustments are bounded (USD 1,000) and non-cash: a positive
+  residual is a mint without a receipt, a negative one a redemption request
+  whose claim stays pending.
+- `prepare-franklin-nmfp3.py` extracts the daily seven-day net yield into
+  `fund.json` (`dailySevenDayNetYield`); Merkle roots unchanged.
+- `TrustModel.ts` T7: honest custodian and administrator; the valuation agent
+  and verifier approve eligible reserves of 100 instead of 80.
+- `REPRODUCIBILITY.md`: release identifier and what can and cannot be rerun.
+
+### Changed
+
+- Gas with the price-risk storage slot: first `submitSnapshot` 438,741 (was
+  438,717), later updates 211,399 / 214,199 (were 211,387 / 214,175), atomic
+  issue 147,151 (was 146,999); the atomic saving is unchanged at 20,411 gas
+  (12.18%). FOBXX `submitSnapshot` 459,460, challenges 66,022-67,578.
+- `FobxxDailyFlows.ts` and `FobxxMonthly.ts` label subscriptions as modelled
+  receipt-backed cash on the trade date.
+- README limitations: guarantee stated as coverage at the attested price;
+  USDY supply described as the aggregator's own metric; per-field trust.
+
+### Results
+
+- 72 tests pass (Hardhat prints 73 including `test/helpers.ts`).
+- 0 unsafe mints at the attested price in all 43 runs. The 39 earlier
+  configurations give the same values as in v2.2.0 in the existing columns.
+- At the day's NAV, without the policy: 1 mint below 101% in each of
+  `supply-buffer-1.5pct` (min post-mint BCR 101.063% attested / 100.995% at
+  NAV) and `supply-ablation-A1-bcr-only` (101.038 / 100.980); this adverse
+  result is kept. The 0.089 pp maximum lag is a property of this sample, not
+  a bound. With the policy: baseline g=8% 474 accepted, 0 extra rejections;
+  buffer 1.5% g=8% 467 (7 price-risk rejections, 101.044% at NAV), g=5% 473
+  (1, 101.015%); A1 g=8% 448 (56 BCR rejections, 101.096%); 0 below 101% at
+  NAV.
+- FOBXX base case: 85/85 cash mints, 83 settlements, 4 adjustments
+  (USD 139.79 in total; the June USD 71.30 claim stays pending). Reinvestment:
+  estimated USD 2.02-2.36 m a month; 20 non-cash mints (USD 2.13 m) accepted
+  in June, the 21st rejected (headroom about USD 2.32 m at 99.5%), June
+  snapshot rejected (residual USD 232,388.96). T+1: same decisions as T+0.
+  USD 1 m discrepancy: series halts, minting stops after expiry.
+- T7: inflated eligible reserves accepted and a mint allowed; flagged
+  off-chain only with an honest position file; no challengeable leaf;
+  eligible above gross rejected.
+
+### Not implemented
+
+- An authenticated price feed between snapshots: the policy is a
+  conservative bound for mint checks, not an observed price.
+- Crediting fund income between snapshots (blocks the reinvestment case).
+- Institutional independence of signers (the contract separates accounts);
+  validation of USDY supply against a direct mint and burn series.
+
 ## [2.2.0] - 2026-11-01 - Major revision
 
 Response to the major-revision brief (priorities P1-P14). The IET Blockchain

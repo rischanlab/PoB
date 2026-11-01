@@ -257,6 +257,9 @@ type Config = {
   // snapshot carries NAV as the authenticated redemption price (v2.2). Requires
   // a persistent controller.
   flowSource: "inferred" | "supply";
+  // Price-risk policy (v2.2): mint checks value tokens at the attested price
+  // grown at this annual rate since the snapshot (basis points; 0 = off).
+  priceAccrualBps: number;
 };
 
 const BASE: Config = {
@@ -282,6 +285,7 @@ const BASE: Config = {
   accrualWindow: 31,
   accrualSource: "series",
   flowSource: "inferred",
+  priceAccrualBps: 0,
 };
 
 /**
@@ -309,6 +313,12 @@ const SUPPLY_CONFIGS: Config[] = [
   { ...SUPPLY_BASE, name: "supply-ablation-A2-bcr-rlc", attestation: "single", mintRule: "no-receipt" },
   { ...SUPPLY_BASE, name: "supply-ablation-A3-bcr-rlc-receipts", attestation: "single" },
   { ...SUPPLY_BASE, name: "supply-ablation-A1-encumbered-4pct", attestation: "single", mintRule: "no-receipt", liquidityPolicy: false, encumberedBps: 400 },
+  // Price-risk policy: 8%/yr is set a priori above every 13-week bill rate in
+  // the window (3.52-5.36%); 5%/yr is a deliberately tight sensitivity.
+  { ...SUPPLY_BASE, name: "supply-baseline-pricerisk-8pct", priceAccrualBps: 800 },
+  { ...SUPPLY_BASE, name: "supply-buffer-1.5pct-pricerisk-8pct", bufferBps: 150, priceAccrualBps: 800 },
+  { ...SUPPLY_BASE, name: "supply-ablation-A1-pricerisk-8pct", attestation: "single", mintRule: "no-receipt", liquidityPolicy: false, priceAccrualBps: 800 },
+  { ...SUPPLY_BASE, name: "supply-buffer-1.5pct-pricerisk-5pct", bufferBps: 150, priceAccrualBps: 500 },
 ];
 
 const toWad = (usdValue: number) =>
@@ -403,6 +413,9 @@ async function runReplay(cfg: Config, obs: Obs[], curves: Map<string, Curve>) {
     liabilityConservationViolations: 0,
     priceLagUnsafeMints: 0,
     maxPriceLagBcrPp: 0,
+    rejectedPriceRisk: 0,
+    minMintBcrAttested: Infinity,
+    minMintBcrAtNav: Infinity,
   };
   const daily: string[] = [];
 
@@ -513,6 +526,9 @@ async function runReplay(cfg: Config, obs: Obs[], curves: Map<string, Curve>) {
         await controller.write.grantRole([keccak256(toBytes(role)), w.account.address], {
           account: admin.account,
         });
+      }
+      if (cfg.priceAccrualBps > 0) {
+        await controller.write.setPriceRiskPolicy([BigInt(cfg.priceAccrualBps) * 10n ** 14n], { account: admin.account });
       }
     }
     if (day % cfg.snapshotEveryDays === 0) {
@@ -662,6 +678,15 @@ async function runReplay(cfg: Config, obs: Obs[], curves: Map<string, Curve>) {
             ? trueAfter
             : Number(((await controller.read.bcrAfterMint([amount])) * 1_000_000n) / WAD) / 1e6;
         if (bcrAfter < cfg.thetaS) m.rejectedBcr += 1;
+        else if (cfg.priceAccrualBps > 0) {
+          // BCR at the attested price passes; the stressed-price check fails.
+          const stressedLiab = fromWad(await controller.read.mintCheckLiabilities([amount]));
+          const stressedAfter =
+            cfg.mintRule === "receipt"
+              ? (snapshotEligible + credited - consumed + f + topUp) / stressedLiab
+              : fromWad(await controller.read.currentEligibleReserves()) / stressedLiab;
+          if (stressedAfter < cfg.thetaS) m.rejectedPriceRisk += 1;
+        }
         if (cfg.liquidityPolicy && rlcNow < BigInt(Math.round(cfg.thetaL * 1e6)) * 10n ** 12n) m.rejectedRlc += 1;
         void bcrNow;
       }
@@ -701,6 +726,8 @@ async function runReplay(cfg: Config, obs: Obs[], curves: Map<string, Curve>) {
           const onPend = fromWad(await controller.read.currentPendingRedemptions());
           const atNav = onElig / (onPend + (units + fu) * obs[day].nav);
           m.maxPriceLagBcrPp = Math.max(m.maxPriceLagBcrPp, (v2Bcr - atNav) * 100);
+          m.minMintBcrAttested = Math.min(m.minMintBcrAttested, v2Bcr);
+          m.minMintBcrAtNav = Math.min(m.minMintBcrAtNav, atNav);
           if (atNav < cfg.thetaS) m.priceLagUnsafeMints += 1;
           units += fu;
         }
@@ -942,6 +969,10 @@ describe(`Real-data replay (${FULL ? "full 1,043 days" : "70-day smoke run"})`, 
           cfg.flowSource,
           m.priceLagUnsafeMints,
           m.maxPriceLagBcrPp.toFixed(3),
+          cfg.priceAccrualBps / 100,
+          m.rejectedPriceRisk,
+          Number.isFinite(m.minMintBcrAttested) ? (m.minMintBcrAttested * 100).toFixed(3) : "",
+          Number.isFinite(m.minMintBcrAtNav) ? (m.minMintBcrAtNav * 100).toFixed(3) : "",
         ].join(","),
       );
       gasRows.push(
@@ -970,7 +1001,7 @@ describe(`Real-data replay (${FULL ? "full 1,043 days" : "70-day smoke run"})`, 
       "config,days,snapshots,buffer_pct,theta_s_pct,settlement_delay_days,snapshot_every_days,encumbered_pct,cleaned,round_trips_netted," +
       "subscription_days,por_mint_accepted,pob_mint_accepted,pob_mint_rejected,pob_rejected_usd_m,por_accept_pob_reject," +
       "redemption_requests,redemption_usd_m,instant,queued,queued_usd_m,settlement_days_deferred,max_claim_age_days,bill_sales_for_settlement_usd_m," +
-      "min_bcr_pct,max_bcr_pct,days_bcr_below_threshold,min_rlc_pct,days_with_pending,days_rlc_below_threshold,days_onchain_liquid_above_actual,days_onchain_eligible_above_actual,unsafe_mints,unsafe_mint_usd_m,rejected_bcr,rejected_rlc,issuer_topup_usd_m,swept_usd_m,v1_accept_v2_reject,v1_unsafe_mints,v1_unsafe_mint_usd_m,max_v1_bcr_overstatement_pp,redemptions_capped,attestation,mint_rule,liquidity_policy,persistent,accrual,liability_conservation_violations,flow_source,price_lag_unsafe_mints,max_price_lag_bcr_pp";
+      "min_bcr_pct,max_bcr_pct,days_bcr_below_threshold,min_rlc_pct,days_with_pending,days_rlc_below_threshold,days_onchain_liquid_above_actual,days_onchain_eligible_above_actual,unsafe_mints,unsafe_mint_usd_m,rejected_bcr,rejected_rlc,issuer_topup_usd_m,swept_usd_m,v1_accept_v2_reject,v1_unsafe_mints,v1_unsafe_mint_usd_m,max_v1_bcr_overstatement_pp,redemptions_capped,attestation,mint_rule,liquidity_policy,persistent,accrual,liability_conservation_violations,flow_source,price_lag_unsafe_mints,max_price_lag_bcr_pp,price_risk_accrual_pct,rejected_price_risk,min_post_mint_bcr_attested_pct,min_post_mint_bcr_at_nav_pct";
     const suffix = only ? "-subset" : "";
     const out = FULL ? `data/results/real-replay-summary${suffix}.csv` : `data/results/real-replay-smoke${suffix}.csv`;
     await mkdir("data/results", { recursive: true });

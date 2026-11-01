@@ -8,7 +8,9 @@
  * outstanding at month end.
  * Derived: shares outstanding at the start of each day, back-calculated from
  * month-end shares and the disclosed flows (stable 1.0000 NAV).
- * Modelled: eligible and gross reserves held at the 30 Sep position-level
+ * Modelled: every gross subscription treated as new cash with a custodian
+ * receipt on the trade date (the filing does not separate reinvested
+ * dividends or report cash receipt); eligible and gross reserves held at the 30 Sep position-level
  * coverage ratios (only month-end positions are filed); other liabilities
  * held at the month-end value; same-day (T+0) settlement.
  *

@@ -69,7 +69,7 @@ contract AblationController is PoBPolicyController {
     {
         if (liquidityPolicy) return super.canMintWithReceipt(mintUnits, receivedCash);
         if (!isSnapshotFresh() || mintUnits == 0) return false;
-        uint256 liabilities = currentTotalLiabilities() + mintLiabilityOf(mintUnits);
+        uint256 liabilities = mintCheckLiabilities(mintUnits);
         return ((currentEligibleReserves() + receivedCash) * WAD) / liabilities >= minimumBCR;
     }
 

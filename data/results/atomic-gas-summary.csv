@@ -1,9 +1,9 @@
 operation,samples,minimum,median,maximum
 submitSnapshot,10,438573,438573,438573
 aggregatePoRReport,10,94653,94653,94653
-advisoryAuthorization,10,96576,96576,96576
+advisoryAuthorization,10,96728,96728,96728
 independentTokenMint,10,70834,70834,70834
-atomicIssue,10,146999,146999,146999
-redemptionRequest,10,153865,153865,153865
-partialSettlement,10,104184,104184,104184
-finalSettlement,10,73002,73002,73002
+atomicIssue,10,147151,147151,147151
+redemptionRequest,10,153887,153887,153887
+partialSettlement,10,104273,104273,104273
+finalSettlement,10,73091,73091,73091
