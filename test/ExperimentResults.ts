@@ -25,10 +25,11 @@ function csvEscape(value: string | bigint | boolean): string {
 }
 
 function ratioToPercent(ratioWad: bigint): string {
-  // Four decimal places in percentage-point form.
-  const scaled = (ratioWad * 1_000_000n) / WAD;
-  const whole = scaled / 10_000n;
-  const fraction = (scaled % 10_000n).toString().padStart(4, "0");
+  // Two decimal places in percentage-point form, rounded half up (v2; the
+  // submitted version truncated to four decimals, e.g. 199.9999).
+  const scaled = (ratioWad * 10_000n + WAD / 2n) / WAD;
+  const whole = scaled / 100n;
+  const fraction = (scaled % 100n).toString().padStart(2, "0");
   return `${whole}.${fraction}`;
 }
 

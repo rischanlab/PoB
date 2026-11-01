@@ -1,0 +1,144 @@
+{
+  "source": "SEC EDGAR Form N-MFP3, primary_doc.xml",
+  "registrant": "FRANKLIN TEMPLETON TRUST",
+  "registrantCik": "0001786958",
+  "series": "Franklin OnChain U.S. Government Money Fund",
+  "seriesId": "S000067043",
+  "reportDate": "2026-09-30",
+  "securityCount": 83,
+  "repoCount": 4,
+  "totalValuePortfolioSecurities": "668273639.72",
+  "amortizedCostPortfolioSecurities": "668414546.40",
+  "cash": "28441399.12",
+  "totalValueOtherAssets": "1129918.11",
+  "totalValueLiabilities": "30025771.88",
+  "netAssetOfSeries": "667960091.75",
+  "numberOfSharesOutstanding": "667967346.6700",
+  "stablePricePerShare": "1.0000",
+  "averagePortfolioMaturity": "31",
+  "averageLifeMaturity": "105",
+  "totalValueDailyLiquidAssets": "449961191.62",
+  "totalValueWeeklyLiquidAssets": "487465130.24",
+  "percentageDailyLiquidAssets": "0.6447",
+  "percentageWeeklyLiquidAssets": "0.6984",
+  "monthlyGrossSubscriptions": "",
+  "monthlyGrossRedemptions": "",
+  "maxDailyGrossRedemptions": "9790355.72",
+  "max5BusinessDayGrossRedemptions": "24268891.87",
+  "dailyFlows": [
+    {
+      "date": "2026-09-01",
+      "subscriptions": "2932082.48",
+      "redemptions": "100500.00"
+    },
+    {
+      "date": "2026-09-02",
+      "subscriptions": "2068930.94",
+      "redemptions": "36125.71"
+    },
+    {
+      "date": "2026-09-03",
+      "subscriptions": "502269.63",
+      "redemptions": "103062.08"
+    },
+    {
+      "date": "2026-09-04",
+      "subscriptions": "109152.97",
+      "redemptions": "5382560.00"
+    },
+    {
+      "date": "2026-09-08",
+      "subscriptions": "331126.32",
+      "redemptions": "81304.20"
+    },
+    {
+      "date": "2026-09-09",
+      "subscriptions": "138945.23",
+      "redemptions": "36141.57"
+    },
+    {
+      "date": "2026-09-10",
+      "subscriptions": "68487.83",
+      "redemptions": "1122217.37"
+    },
+    {
+      "date": "2026-09-11",
+      "subscriptions": "281092.33",
+      "redemptions": "7919.44"
+    },
+    {
+      "date": "2026-09-14",
+      "subscriptions": "202572.21",
+      "redemptions": "5120480.91"
+    },
+    {
+      "date": "2026-09-15",
+      "subscriptions": "179503.79",
+      "redemptions": "3604026.07"
+    },
+    {
+      "date": "2026-09-16",
+      "subscriptions": "5066451.74",
+      "redemptions": "5001900.00"
+    },
+    {
+      "date": "2026-09-17",
+      "subscriptions": "67385.14",
+      "redemptions": "3100.00"
+    },
+    {
+      "date": "2026-09-18",
+      "subscriptions": "73275.39",
+      "redemptions": "5869510.08"
+    },
+    {
+      "date": "2026-09-21",
+      "subscriptions": "305963.14",
+      "redemptions": "9790355.72"
+    },
+    {
+      "date": "2026-09-22",
+      "subscriptions": "2042298.30",
+      "redemptions": "1100.00"
+    },
+    {
+      "date": "2026-09-23",
+      "subscriptions": "3168105.66",
+      "redemptions": "33600.00"
+    },
+    {
+      "date": "2026-09-24",
+      "subscriptions": "68537.08",
+      "redemptions": "1050.05"
+    },
+    {
+      "date": "2026-09-25",
+      "subscriptions": "1081171.76",
+      "redemptions": "123.29"
+    },
+    {
+      "date": "2026-09-28",
+      "subscriptions": "320314.44",
+      "redemptions": "5008188.48"
+    },
+    {
+      "date": "2026-09-29",
+      "subscriptions": "68089.52",
+      "redemptions": "761092.00"
+    },
+    {
+      "date": "2026-09-30",
+      "subscriptions": "4321453.47",
+      "redemptions": "2612.52"
+    }
+  ],
+  "derived": {
+    "sumSecurityValues": "668273639.72",
+    "sumDailyLiquidSecurities": "421410671.11",
+    "sumWeeklyLiquidSecurities": "458904646.14"
+  },
+  "holdingsPdfCrossCheck": {
+    "identifiersFound": 83,
+    "valueMismatchesOver1Usd": 0
+  }
+}

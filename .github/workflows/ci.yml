@@ -16,6 +16,7 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm run generate:data
+      - run: npm run validate:treasury
       - run: npm test
       - run: npm run experiment
       - uses: actions/upload-artifact@v4

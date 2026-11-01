@@ -1,5 +1,8 @@
 # Contribution: Atomic Token Supply and RWA-PoB Liability Enforcement
 
+> Historical design note for v1.0.0. Numbers below are the submitted
+> version's. Current results and the v2 changes are in `CHANGELOG.md`.
+
 ## The big why
 
 The central purpose of RWA-PoB is not merely to report whether a token appears

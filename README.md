@@ -17,18 +17,32 @@ The prototype compares:
 
 > **Research disclaimer:** This repository is not an audit of USDY, does not
 > reconstruct USDY's actual reserve portfolio, and is not production-ready
-> financial software. Public USDY observations are used only to calibrate the
-> scale of token liabilities. Position-level reserve, encumbrance, legal,
-> settlement, liquidity, and credential states are controlled experimental data.
+> financial software. The real-data replay uses the public USDY liability
+> series and official U.S. Treasury bill rates; the reserve portfolio itself
+> is modelled because position-level holdings are not public. Credential
+> states and signers are simulated test accounts.
+
+> **Version 2.0.0 (response to review).** Settlement now reduces eligible
+> reserves, each role signs only its own fields, reserve positions can be
+> challenged on-chain against the Merkle root, custodian receipts credit
+> subscription cash, and the evaluation adds a 1,043-day on-chain replay on real
+> data. See [`CHANGELOG.md`](CHANGELOG.md) for the full list, results, and the
+> regression test for each review comment.
 
 ## Main contributions implemented
 
-- EIP-712 signatures from five required institutional roles:
-  - custodian;
-  - administrator;
-  - valuation agent;
-  - legal or trustee role; and
-  - independent verifier.
+- Role-scoped EIP-712 claims from five required institutional roles (v2):
+  - custodian: header + gross reserves;
+  - administrator: header + token, pending, and other liabilities;
+  - valuation agent: header + eligible reserves and liquid assets;
+  - legal or trustee role: header (reserve root); and
+  - independent verifier: the complete snapshot.
+  The header is epoch, as-of time, expiry, policy hash, and reserve root.
+- Permissionless position challenge: a Merkle proof of a committed position
+  that breaks the eligibility rules suspends the snapshot (v2).
+- Custodian-signed subscription receipts, credited atomically with the mint
+  (`authorizeMintWithReceipt`) (v2).
+- Settlement reduces liquid, eligible, and gross reserves (v2 fix).
 - A canonical snapshot containing:
   - reporting epoch and timestamps;
   - reserve Merkle root;
@@ -46,6 +60,8 @@ The prototype compares:
 - Pending-redemption accounting until settlement.
 - Aggregate PoR baseline for controlled comparison.
 - Deterministic reserve scenarios using seed `42`.
+- Real-data replay: 1,043 days of USDY liabilities, reserves priced daily from
+  U.S. Treasury Daily Treasury Bill Rates, every decision made on-chain (v2).
 - CSV outputs for policy decisions and gas usage.
 
 ## Architecture
@@ -135,7 +151,8 @@ $$
 $$
 
 A mint is permitted only when the post-mint BCR meets the configured
-threshold. The current experiment uses a minimum BCR of **105%**.
+threshold. The controlled scenarios use a minimum BCR of **105%**; the
+real-data replay uses **101%**.
 
 For a proposed redemption request, the experiment calculates:
 
@@ -160,25 +177,36 @@ in the settlement queue.
 │       └── ci.yml
 ├── contracts/
 │   ├── AggregatePoRBaseline.sol
-│   └── PoBPolicyController.sol
+│   ├── PoBPolicyController.sol
+│   ├── RWABackedToken.sol
+│   └── test/PoBPolicyControllerV1.sol   # submitted version, comparison only
 ├── data/
 │   ├── raw/
 │   │   ├── README.md
-│   │   └── rwa-xyz-treasury-market-caps.csv   # ignored by Git
+│   │   ├── treasury/                          # U.S. Treasury bill rates (committed)
+│   │   └── rwa-xyz-*.csv                      # ignored by Git
 │   ├── input/
 │   │   ├── usdy-calibration.json
 │   │   ├── usdy-observed-liabilities.csv
 │   │   └── usdy-scenarios/
 │   └── results/
 │       ├── gas-results.csv
-│       └── scenario-results.csv
+│       ├── scenario-results.csv
+│       ├── real-replay-summary.csv
+│       ├── real-replay-gas.csv
+│       └── real-replay-daily-baseline.csv
 ├── scripts/
+│   ├── fetch-treasury-bill-rates.sh
 │   ├── generate-reserve-data.mjs
-│   └── prepare-usdy-data.mjs
+│   ├── prepare-usdy-data.mjs
+│   └── validate-treasury-bill-rates.py
 ├── test/
 │   ├── ExperimentResults.ts
 │   ├── helpers.ts
-│   └── PoBPolicyController.ts
+│   ├── PoBPolicyController.ts
+│   ├── RealDataReplay.ts
+│   └── V2ReviewFixes.ts
+├── CHANGELOG.md
 ├── CITATION.cff
 ├── LICENSE
 ├── REPRODUCIBILITY.md
@@ -276,25 +304,21 @@ data/results/gas-results.csv
 The original RWA.xyz CSV is intentionally excluded from Git. To reproduce the
 data-preparation stage:
 
-1. Download the Treasury market-cap CSV from RWA.xyz.
-2. Save it as:
+1. On RWA.xyz, open Ondo U.S. Dollar Yield (USDY), choose the market-cap
+   chart with the measure "Bridged Token Value (Dollar)", and download the
+   CSV. It has one column per chain (Ethereum, Solana, BNB Chain, ...).
+2. Run:
 
-```text
-data/raw/rwa-xyz-treasury-market-caps.csv
+```bash
+node scripts/prepare-usdy-data.mjs path/to/rwa-xyz-usdy-market-caps.csv --until 2026-07-26
 ```
 
-3. Run:
-
-```powershell
-npm.cmd run prepare:usdy
-```
-
-The preparation script selects:
-
-```text
-Product: Ondo U.S. Dollar Yield
-Measure: Bridged Token Value (Dollar)
-```
+The script sums the chain columns for each date. The committed series was
+produced from the export downloaded on 2026-11-01. The script also accepts the
+older Treasury market-cap export (one column per product), from which it reads
+the "Ondo U.S. Dollar Yield" column. RWA.xyz revises history from time to time:
+an export downloaded in mid-2026 matched to the cent up to 2024-10-28 and
+differed by up to 2.9% on some later days.
 
 It writes:
 
@@ -320,8 +344,9 @@ The processed calibration contains:
 | Observations | 1,043 |
 | First observation | 2023-09-18 |
 | Last observation | 2026-07-26 |
-| Latest observed token value | $2,161,765,036.997564 |
-| Source measure | Bridged Token Value (Dollar) |
+| Latest observed token value | $2,161,446,182.114861 |
+| Source measure | Bridged Token Value (Dollar), summed across 12 chains |
+| Source file | RWA.xyz USDY market-caps export, downloaded 2026-11-01 |
 
 The observed token value calibrates the liability scale. It is not treated as
 independent proof of USDY's legal liabilities or reserves.
@@ -351,27 +376,27 @@ encumbrance, legal eligibility, settlement finality, and liquid value.
 ```text
 Scenario: valid
   Liability date: 2026-07-26
-  Token liabilities: $2161765036.997564
-  Gross reserves: $2486029792.547198
-  Eligible reserves: $2479361762.407983
-  Liquid assets: $216176503.699756
-  Merkle root: 0x50363b2ecc5eb8f344003716a7de7645a678556583512712bbfab22f0ff47903
+  Token liabilities: $2161446182.114861
+  Gross reserves: $2485663109.432090
+  Eligible reserves: $2478996062.810477
+  Liquid assets: $216144618.211486
+  Merkle root: 0xd936203f5b7c8087fb46d1982f5d186f4ceadf1bb78dba8ed1df1880ac2a4463
 
 Scenario: encumbered-assets
   Liability date: 2026-07-26
-  Token liabilities: $2161765036.997564
-  Gross reserves: $2486029792.547198
-  Eligible reserves: $2093076978.470358
-  Liquid assets: $216176503.699756
-  Merkle root: 0x51a3707a10405c3e7e5dee33a0fcdd516c6a7ec62bc920d86cabace46b14b9fe
+  Token liabilities: $2161446182.114861
+  Gross reserves: $2485663109.432090
+  Eligible reserves: $2092768254.902791
+  Liquid assets: $216144618.211486
+  Merkle root: 0xfaa711c1f81d3dec4c95a5716998de876fd4b879d2ba6e4202b1ec8d8b27863b
 
 Scenario: liquidity-stress
   Liability date: 2026-07-26
-  Token liabilities: $2161765036.997564
-  Gross reserves: $2486029792.547198
-  Eligible reserves: $2479361762.407983
-  Liquid assets: $43235300.739951
-  Merkle root: 0xe949f27447550c77bc34bddb0d96ec6851f12bbf309a647311557189afd48b16
+  Token liabilities: $2161446182.114861
+  Gross reserves: $2485663109.432090
+  Eligible reserves: $2478996062.810477
+  Liquid assets: $43228923.642297
+  Merkle root: 0x46532b1aadf94caaa3c962dea17e2e68d1516d92f1eac50aa98bc43a7dd75437
 ```
 
 ### Unit tests
@@ -393,9 +418,9 @@ PoBPolicyController
 
 | Scenario | Aggregate PoR mint | RWA-PoB mint | Redemption | BCR | Post-request RLC |
 |---|---:|---:|---|---:|---:|
-| Valid | Accept | Accept | Instant | 114.1209% | 199.9999% |
-| Encumbered assets | Accept | Reject | Instant | 96.3408% | 199.9999% |
-| Liquidity stress | Accept | Accept | Queue | 114.1209% | 39.9999% |
+| Valid | Accept | Accept | Instant | 114.12% | 200.00% |
+| Encumbered assets | Accept | Reject | Instant | 96.34% | 200.00% |
+| Liquidity stress | Accept | Accept | Queue | 114.12% | 40.00% |
 
 The encumbered-assets scenario demonstrates the central difference. The
 aggregate baseline accepts minting because gross reserves exceed token
@@ -411,13 +436,87 @@ backing but queues the tested redemption because liquid assets cover only about
 
 | Operation | Gas used |
 |---|---:|
-| `submitSnapshot:valid` | 362,253 |
-| `baselineReport:valid` | 94,689 |
-| `submitSnapshot:encumbered-assets` | 194,904 |
-| `baselineReport:encumbered-assets` | 37,789 |
-| `submitSnapshot:liquidity-stress` | 197,716 |
-| `baselineReport:liquidity-stress` | 37,789 |
+| `submitSnapshot:valid` | 370,625 |
+| `baselineReport:valid` | 94,701 |
+| `submitSnapshot:encumbered-assets` | 203,288 |
+| `baselineReport:encumbered-assets` | 37,801 |
+| `submitSnapshot:liquidity-stress` | 206,076 |
+| `baselineReport:liquidity-stress` | 37,801 |
 
+## Real-data replay (v2)
+
+```bash
+npm run validate:treasury   # 750 rows, 4,864 checks, 0 mismatches
+npm run experiment:real     # full 1,043-day replay, 11 configurations
+```
+
+`test/RealDataReplay.ts` replays the observed USDY net flows (observed change
+minus estimated accrual) day by day against a modelled 2% cash + 26-week
+Treasury-bill ladder priced from the official daily bill curve. Each snapshot,
+mint (with a custodian receipt), redemption, and settlement goes through the
+deployed controller. Baseline results (`data/results/real-replay-summary.csv`):
+
+| | Aggregate PoR | RWA-PoB |
+|---|---:|---:|
+| Mints accepted (of 343 subscription days) | 343 | 327 |
+| Mints accepted, 4% encumbered | 343 | 0 |
+| Unsafe mints (post-mint BCR < 101%) | not checked | 0 |
+| Unsafe mints under v1 settlement logic, 4% encumbered | | 43 (USD 9.60 m) |
+
+All configurations and the model assumptions are in
+[`CHANGELOG.md`](CHANGELOG.md). Without the `RWA_POB_REAL_REPLAY=1` flag
+(as in `npm test` and CI), the replay runs for 70 days as a smoke test.
+
+
+## Real position-level snapshot (v2.1)
+
+```bash
+npm run prepare:franklin          # N-MFP3 XML -> data/input/franklin-fobxx/holdings.csv, fund.json
+npm run build:franklin            # positions.csv, tree.json, snapshot.json (Merkle root)
+npm run experiment:real-positions # on-chain verification, policy and challenges
+```
+
+The reserve tree is built from a real filing: the Franklin OnChain U.S.
+Government Money Fund (FOBXX, the fund behind the BENJI token) Form N-MFP3
+for 30 September 2026, committed in `data/raw/franklin/` (SEC EDGAR, public
+record). It has 85 positions: 83 securities (Treasury bills and notes, agency
+debt, 4 tri-party repos with 38 collateral lines), cash, and other assets.
+Values, maturities and the daily/weekly liquidity flags are the fund's own;
+the haircut schedule (0/10/25/50 bps by days to final maturity) is a stated
+policy assumption. The 83 CUSIP/value pairs match the fund's published
+holdings PDF to the dollar.
+
+| | Result |
+|---|---:|
+| Merkle root | `0x8f8a056a...56595c1` |
+| Positions verified on-chain | 85 of 85 (proof length 6-7) |
+| Gross / eligible reserves (USD m) | 697.84 / 695.75 |
+| Liquid within 7 days (USD m) | 486.96 (fund-reported WLA 487.47) |
+| Token liabilities + other liabilities (USD m) | 667.97 + 30.03 |
+| BCR after haircuts | 99.68% |
+| RLC against the largest 5-day redemptions in Sep 2026 (USD 24.27 m) | 2,006.51% |
+| Mint of USD 1 m, minBCR 100% | rejected (with or without receipt) |
+| Mint of USD 1 m, minBCR 99.5% | accepted; headroom without new cash USD 1.25 m |
+| `submitSnapshot` gas | 391,392 |
+
+A 1:1 government money fund has no over-collateralisation and carries its
+securities at amortised cost, so at market value with haircuts its BCR is just
+below 100%. The policy threshold must follow the product: a ≥100% BCR fits an
+over-collateralised note such as USDY; a fund share needs a threshold such as
+99.5% (the half-cent band of Rule 2a-7) and receipt-backed minting.
+
+Five tampered versions of real positions are each caught by a permissionless
+challenge that suspends minting (`data/results/real-position-challenges.csv`,
+66,000-67,556 gas): a repo pledged elsewhere but counted, receivables counted
+as eligible, an unsettled bill counted, a haircut skipped, and liquid value
+above eligible value. A non-weekly-liquid note reported as liquid is *not*
+caught, because the contract does not check liquidity against maturity; this
+is listed as a limitation. A simple maturity rule would not fix it: 35 of the
+fund's 40 weekly-liquid positions (USD 288.90 m) mature after 7 days (up to
+365), mostly Treasuries that Rule 2a-7 counts as weekly liquid, so the rule
+would suspend a sound fund. The leaf would need the regulatory liquidity
+class. The tampering tests show rule coverage on real positions; they are
+not a detection rate, since the rules and the tampering were written together.
 
 ## View result files in PowerShell
 
@@ -445,7 +544,10 @@ Import-Csv data\results\gas-results.csv |
 
 ## Tests covered
 
-The current unit tests verify:
+49 tests pass (`npm test`; Hardhat also lists `test/helpers.ts` as a passing file, so it prints 50), including 14 v2 regression tests in
+`test/V2ReviewFixes.ts` (settlement BCR, role scoping, Merkle challenge,
+subscription receipts) and 3 tests on the real FOBXX position snapshot in
+`test/RealPositionSnapshot.ts`. The controller unit tests verify:
 
 - acceptance of a complete and fresh snapshot;
 - rejection of a missing mandatory signature;
@@ -455,8 +557,8 @@ The current unit tests verify:
 - pending liability until settlement; and
 - mint suspension after snapshot staleness.
 
-The current experimental evaluation contains three deterministic scenarios.
-It should not yet be described as a comprehensive formal security evaluation.
+The evaluation contains three deterministic scenarios, the real-data
+replay, and the real position-level snapshot. It is not a formal security evaluation.
 
 ## Reproducibility guarantees
 
@@ -492,6 +594,7 @@ GitHub Actions runs the following on every push and pull request:
 npm ci
 npm run build
 npm run generate:data
+npm run validate:treasury
 npm test
 npm run experiment
 ```
@@ -505,7 +608,12 @@ third-party CSV is not stored in the repository.
 
 - Signed credentials prove attribution and integrity, not the truth of
   off-chain statements.
-- The position-level reserve portfolio is synthetic.
+- The position-level reserve portfolio is synthetic in the scenarios and
+  modelled (cash + Treasury-bill ladder priced from real rates) in the replay.
+  The real FOBXX snapshot is a single month-end filing; it is not a time
+  series, and its haircuts are a policy assumption.
+- The challenge rules do not check liquidity against maturity, so a
+  long-dated position reported as liquid is not caught on-chain.
 - Institutional signers are simulated test accounts.
 - The experiment does not reconstruct or audit USDY's actual holdings,
   encumbrances, custody accounts, or settlement records.

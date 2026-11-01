@@ -12,5 +12,12 @@ evaluation:
 - `atomic-gas-summary.csv`
 - `atomic-gas-comparison.csv`
 
+Run `npm run experiment:real-positions` to generate the real FOBXX
+position-snapshot results:
+
+- `real-position-snapshot.json`
+- `real-position-policy.csv`
+- `real-position-challenges.csv`
+
 Do not commit hand-edited versions of these files. Regenerate them from the
 code and record the Git commit used for the paper.

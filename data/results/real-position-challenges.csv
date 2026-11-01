@@ -1,0 +1,7 @@
+tamper,instrument,detected,reason,challengeGas
+repo pledged elsewhere but counted,ZS48579,true,EncumberedButEligible,66000
+receivables counted as eligible,OTHER-ASSETS,true,LegallyIneligibleButEligible,66871
+unsettled bill counted,912797VN4,true,UnsettledButEligible,66380
+haircut skipped on longest note,3133EWTD2,true,EligibleExceedsHaircutValue,66600
+liquid value above eligible,3133ETG92,true,LiquidExceedsEligible,67556
+non-weekly-liquid note reported liquid,3133ETG92,false,None,

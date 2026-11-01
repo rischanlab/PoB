@@ -4,8 +4,19 @@ import {
   writeFile,
 } from "node:fs/promises";
 
+// Usage: node scripts/prepare-usdy-data.mjs [INPUT.csv] [--until YYYY-MM-DD]
+// Accepts either RWA.xyz export layout:
+//  - Treasury market caps: one column per product ("Ondo U.S. Dollar Yield");
+//  - USDY market caps: one column per chain (Ethereum, Solana, ...), which
+//    are summed to the product total.
+const ARGS = process.argv.slice(2);
+const untilIndex = ARGS.indexOf("--until");
+const UNTIL = untilIndex >= 0 ? ARGS[untilIndex + 1] : null;
+const positional = ARGS.filter(
+  (arg, index) => arg !== "--until" && index !== untilIndex + 1,
+);
 const INPUT_FILE =
-  "data/raw/rwa-xyz-treasury-market-caps.csv";
+  positional[0] ?? "data/raw/rwa-xyz-treasury-market-caps.csv";
 
 const OUTPUT_CSV =
   "data/input/usdy-observed-liabilities.csv";
@@ -100,10 +111,34 @@ if (measureIndex === -1) {
   throw new Error('Required column "Measure" was not found.');
 }
 
-if (productIndex === -1) {
+const META_COLUMNS = new Set(["Timestamp", "Date", "Measure"]);
+const chainIndexes =
+  productIndex === -1
+    ? headers
+        .map((header, index) => [header.trim(), index])
+        .filter(([header]) => header !== "" && !META_COLUMNS.has(header))
+        .map(([, index]) => index)
+    : [];
+const LAYOUT = productIndex === -1 ? "per-chain (summed)" : "per-product";
+
+if (productIndex === -1 && chainIndexes.length === 0) {
   throw new Error(
-    `Required product column "${PRODUCT_COLUMN}" was not found.`,
+    `Neither the product column "${PRODUCT_COLUMN}" nor chain columns were found.`,
   );
+}
+
+function productValue(row) {
+  if (productIndex !== -1) return parseNumber(row[productIndex]);
+  let total = 0;
+  let any = false;
+  for (const index of chainIndexes) {
+    const value = parseNumber(row[index]);
+    if (value !== null) {
+      total += value;
+      any = true;
+    }
+  }
+  return any ? total : null;
 }
 
 const observations = [];
@@ -113,7 +148,10 @@ for (const line of lines.slice(1)) {
 
   const date = row[dateIndex]?.trim();
   const measure = row[measureIndex]?.trim();
-  const observedValueUsd = parseNumber(row[productIndex]);
+  const observedValueUsd = productValue(row);
+  if (UNTIL && date > UNTIL) {
+    continue;
+  }
 
   if (
     !date ||
@@ -209,6 +247,11 @@ const first = processed[0];
 const calibration = {
   source: "RWA.xyz downloaded CSV",
   sourceFile: INPUT_FILE,
+  layout: LAYOUT,
+  ...(productIndex === -1
+    ? { chains: chainIndexes.map((index) => headers[index].trim()) }
+    : {}),
+  ...(UNTIL ? { until: UNTIL } : {}),
   product: PRODUCT_COLUMN,
   measure: EXPECTED_MEASURE,
   interpretation:
